@@ -175,9 +175,10 @@ func TestMagdaCFGModeOnlyAcceptsDSL(t *testing.T) {
 			// All actions should be valid REAPER actions, not JSON schema actions
 			validActions := []string{
 				"create_track", "create_clip", "create_clip_at_bar",
-				"add_instrument", "add_track_fx", "set_track_name",
-				"set_track_volume", "set_track_pan", "set_track_mute",
-				"set_track_solo", "delete_track", "delete_clip",
+				"add_instrument", "add_track_fx", "add_midi",
+				"set_track_name", "set_track_volume", "set_track_pan",
+				"set_track_mute", "set_track_solo", "set_track", "set_clip",
+				"delete_track", "delete_clip",
 			}
 
 			found := false

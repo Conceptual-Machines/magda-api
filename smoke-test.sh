@@ -19,13 +19,14 @@ FAILED=0
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$SCRIPT_DIR"
 
-# Load environment variables from .envrc
-if [ -f "$PROJECT_ROOT/.envrc" ]; then
-    # Extract and eval export statements, ignoring other shell code
+# Always load from .env file first
+if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a
-    while IFS= read -r line; do
-        eval "$line" 2>/dev/null || true
-    done < <(grep "^export " "$PROJECT_ROOT/.envrc" 2>/dev/null)
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        export "$line" 2>/dev/null || true
+    done < "$PROJECT_ROOT/.env"
     set +a
 fi
 
@@ -71,16 +72,16 @@ if [ -n "$AIDEAS_EMAIL" ] && [ -n "$AIDEAS_PASSWORD" ]; then
     echo ""
 elif [ -z "$AIDEAS_EMAIL" ] || [ -z "$AIDEAS_PASSWORD" ]; then
     echo -e "${YELLOW}⚠️  Warning: AIDEAS_EMAIL or AIDEAS_PASSWORD not set${NC}"
-    echo "   Looking for .envrc in: $PROJECT_ROOT"
-    if [ ! -f "$PROJECT_ROOT/.envrc" ]; then
-        echo "   No .envrc file found"
+    echo "   Looking for .env in: $PROJECT_ROOT"
+    if [ ! -f "$PROJECT_ROOT/.env" ]; then
+        echo "   No .env file found"
     fi
     echo ""
 fi
 
 if [ -z "$TOKEN" ]; then
     echo -e "${YELLOW}⚠️  Warning: No authentication token. Generation test will be skipped.${NC}"
-    echo "   To test MCP tools, ensure AIDEAS_EMAIL and AIDEAS_PASSWORD are set in .envrc"
+    echo "   To test MCP tools, ensure AIDEAS_EMAIL and AIDEAS_PASSWORD are set in .env"
     echo ""
     SKIP_GENERATION=true
 else
