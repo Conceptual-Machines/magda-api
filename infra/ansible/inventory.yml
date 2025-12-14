@@ -1,0 +1,7 @@
+# Inventory file for AWS EC2 instances
+[production]
+aideas-api-production ansible_host=13.134.106.238 ansible_user=ubuntu
+
+[production:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+ansible_python_interpreter=/usr/bin/python3

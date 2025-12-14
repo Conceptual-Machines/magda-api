@@ -1,0 +1,62 @@
+package templates
+
+type LayoutData struct {
+	Title      string
+	IsLoggedIn bool
+	UserEmail  string
+}
+
+templ Layout(title string) {
+	@LayoutWithData(LayoutData{Title: title, IsLoggedIn: false}) {
+		{ children... }
+	}
+}
+
+templ LayoutWithData(data LayoutData) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ data.Title } - AIDEAS</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<script src="https://unpkg.com/htmx.org@2.0.0"></script>
+			<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+			<style>
+				body {
+					background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+					min-height: 100vh;
+				}
+			</style>
+		</head>
+		<body class="antialiased">
+			<nav class="bg-white/10 backdrop-blur-lg border-b border-white/20">
+				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<div class="flex justify-between h-16">
+					<div class="flex items-center">
+						<a href="/" class="flex items-center">
+							<img src="/static/logo-white.svg" alt="Musical AIDEAS" class="h-12 w-auto"/>
+						</a>
+					</div>
+					<div class="flex items-center space-x-4">
+						if data.IsLoggedIn {
+							<a href="/dashboard" class="text-white/80 hover:text-white">Dashboard</a>
+							<a href="/api/metrics" class="text-white/80 hover:text-white">API Status</a>
+						} else {
+							<a href="/api/metrics" class="text-white/80 hover:text-white">API Status</a>
+						}
+					</div>
+					</div>
+				</div>
+			</nav>
+			<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+				{ children... }
+			</main>
+			<footer class="fixed bottom-0 w-full bg-white/5 backdrop-blur-lg border-t border-white/10 py-4">
+				<div class="max-w-7xl mx-auto px-4 text-center text-white/60 text-sm">
+					© 2025 Musical AIDEAS. All rights reserved.
+				</div>
+			</footer>
+		</body>
+	</html>
+}

@@ -1,0 +1,85 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+DEPLOYMENT.md
+*.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+*_test.go
+test_*
+*_test_*
+
+# Build artifacts
+bin/
+dist/
+build/
+
+# Dependencies (if any)
+node_modules/
+vendor/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage reports
+coverage/
+*.out
+
+# Terraform
+infra/
+*.tf
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Scripts
+scripts/
+*.sh
+
+# Smoke tests
+smoke-test.sh
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Go specific
+go.work
+go.work.sum
+
+# IDE specific
+*.iml
+.project
+.classpath

@@ -1,0 +1,46 @@
+services:
+  aideas-api:
+    image: ${API_IMAGE:-086060940749.dkr.ecr.eu-west-2.amazonaws.com/aideas-api:latest}
+    container_name: aideas-api-prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - aideas_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "awslogs"
+      options:
+        awslogs-region: "eu-west-2"
+        awslogs-group: "/aideas-api/app"
+        awslogs-stream: "api-container"
+
+  nginx:
+    image: nginx:alpine
+    container_name: aideas-api-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /opt/aideas-api/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - aideas-api
+    networks:
+      - aideas_network
+    logging:
+      driver: "awslogs"
+      options:
+        awslogs-region: "eu-west-2"
+        awslogs-group: "/aideas-api/nginx"
+        awslogs-stream: "nginx-container"
+
+networks:
+  aideas_network:
+    driver: bridge

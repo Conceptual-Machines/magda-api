@@ -1,0 +1,10 @@
+{"prompt": "Create a simple chord progression in C major", "expected": {"key": "C", "scale": "major", "min_chords": 4, "content_type": "chords"}}
+{"prompt": "Generate a jazz progression in Bb major with 7th chords", "expected": {"key": "Bb", "scale": "major", "min_chords": 4, "content_type": "chords", "requires_7ths": true}}
+{"prompt": "Make a sad chord progression in A minor", "expected": {"key": "A", "scale": "minor", "min_chords": 4, "content_type": "chords"}}
+{"prompt": "Create chords and melody in G major", "expected": {"key": "G", "scale": "major", "content_type": "chords_and_melody"}}
+{"prompt": "Generate a blues progression in E", "expected": {"key": "E", "scale": "major", "min_chords": 12, "content_type": "chords"}}
+{"prompt": "Create a chord progression in D dorian mode", "expected": {"key": "D", "scale": "dorian", "min_chords": 4, "content_type": "chords"}}
+{"prompt": "Make an uplifting progression in F major with melody", "expected": {"key": "F", "scale": "major", "content_type": "chords_and_melody"}}
+{"prompt": "Generate a dark ambient progression in C# minor", "expected": {"key": "C#", "scale": "minor", "min_chords": 4, "content_type": "chords"}}
+{"prompt": "Create a bossa nova progression in Dm", "expected": {"key": "D", "scale": "minor", "min_chords": 4, "content_type": "chords"}}
+{"prompt": "Make a modern pop progression in A major with bass and melody", "expected": {"key": "A", "scale": "major", "content_type": "full_arrangement"}}

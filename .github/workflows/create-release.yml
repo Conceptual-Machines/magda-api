@@ -1,0 +1,49 @@
+name: Create Sentry Release (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., test-v1, or leave empty for git SHA)"
+        required: false
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for commit linking
+
+      - name: Generate version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(echo ${{ github.sha }} | cut -c1-8)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Release version: $VERSION"
+
+      - name: Create Sentry release
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: aideas-api
+        with:
+          environment: production
+          version: aideas-api@${{ steps.version.outputs.version }}
+          set_commits: auto
+
+      - name: Success message
+        run: |
+          echo "✅ Sentry release created successfully!"
+          echo "📦 Version: aideas-api@${{ steps.version.outputs.version }}"
+          echo ""
+          echo "🔍 View in Sentry:"
+          echo "https://sentry.io/organizations/${{ secrets.SENTRY_ORG }}/projects/aideas-api/releases/aideas-api@${{ steps.version.outputs.version }}/"

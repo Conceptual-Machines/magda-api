@@ -1,0 +1,76 @@
+---
+# Setup Let's Encrypt SSL certificates for AIDEAS API
+# This playbook installs certbot and obtains SSL certificates
+
+- name: "🔐 Setup SSL Certificates with Let's Encrypt"
+  hosts: production
+  gather_facts: true
+  vars:
+    app_dir: "/opt/aideas-api"
+    domain_name: "api.musicalaideas.com"
+    email: "admin@musicalaideas.com" # Update with your email
+
+  tasks:
+    - name: "📦 Install certbot and dependencies"
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: yes
+      become: true
+
+    - name: "🛑 Stop nginx temporarily for certificate generation"
+      shell: docker stop aideas-api-nginx-prod || true
+      become: true
+      ignore_errors: true
+
+    - name: "🔐 Obtain SSL certificate from Let's Encrypt"
+      shell: |
+        certbot certonly --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email {{ email }} \
+          -d {{ domain_name }} \
+          --preferred-challenges http
+      become: true
+      register: certbot_result
+
+    - name: "📋 Display certbot result"
+      debug:
+        var: certbot_result.stdout_lines
+
+    - name: "📁 Create SSL directory"
+      file:
+        path: "{{ app_dir }}/ssl"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+      become: true
+
+    - name: "🔗 Copy certificates to app directory"
+      shell: |
+        cp /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem {{ app_dir }}/ssl/certificate.pem
+        cp /etc/letsencrypt/live/{{ domain_name }}/privkey.pem {{ app_dir }}/ssl/private-key.pem
+        chown ubuntu:ubuntu {{ app_dir }}/ssl/*.pem
+        chmod 644 {{ app_dir }}/ssl/certificate.pem
+        chmod 600 {{ app_dir }}/ssl/private-key.pem
+      become: true
+
+    - name: "🔄 Restart nginx"
+      shell: docker start aideas-api-nginx-prod || true
+      become: true
+
+    - name: "⏰ Setup certificate renewal cron job"
+      cron:
+        name: "Renew Let's Encrypt certificates"
+        minute: "0"
+        hour: "3"
+        job: "certbot renew --quiet --deploy-hook 'docker restart aideas-api-nginx-prod'"
+        user: root
+      become: true
+
+    - name: "✅ SSL setup complete"
+      debug:
+        msg: "SSL certificates installed for {{ domain_name }}"

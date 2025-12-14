@@ -1,0 +1,14 @@
+{
+    "input_array": [{
+      "role": "user",
+      "content": "{\"user_prompt\": \"...\"}"
+    },{
+      "role": "user",
+      "content": "{\"musical_context\": \"...\"}"
+    },
+    {
+      "role": "user",
+      "content": "{\"parameters\": \"...\"}"
+    }
+  ]
+  }

@@ -1,0 +1,39 @@
+# Dockerfile.ci - Multi-stage build for CI pipeline
+# hadolint ignore=DL3007
+FROM golang:1.24-alpine AS base
+WORKDIR /app
+# hadolint ignore=DL3018
+RUN apk add --no-cache git make gcc musl-dev
+ENV CGO_ENABLED=1
+
+# Stage 1: Lint
+FROM golangci/golangci-lint:v1.64.8 AS lint
+WORKDIR /app
+COPY . .
+RUN golangci-lint run --config=golangci.yml
+
+# Stage 2: Build
+FROM base AS build
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN make build
+
+# Stage 3: Test
+FROM base AS test
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Run tests with coverage and save output
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+RUN go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test-output.log && \
+    go tool cover -html=coverage.out -o coverage.html && \
+    go tool cover -func=coverage.out > coverage-summary.txt
+
+# Final stage: Export artifacts
+FROM scratch AS export
+COPY --from=build /app/bin/aideas-api /aideas-api
+COPY --from=test /app/coverage.out /coverage.out
+COPY --from=test /app/coverage.html /coverage.html
+COPY --from=test /app/test-output.log /test-output.log
+COPY --from=test /app/coverage-summary.txt /coverage-summary.txt

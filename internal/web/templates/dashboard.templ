@@ -1,0 +1,163 @@
+package templates
+
+import "fmt"
+
+type DashboardData struct {
+	Email             string
+	Role              string
+	Credits           int
+	TotalRequests     int64
+	TotalTokens       int64
+	TotalCreditsUsed  int64
+	AvgDurationMS     float64
+}
+
+templ Dashboard(data DashboardData) {
+	@LayoutWithData(LayoutData{Title: "Dashboard", IsLoggedIn: true, UserEmail: data.Email}) {
+		<div class="space-y-6">
+			<!-- User Info -->
+			<div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+				<div class="flex justify-between items-center">
+					<div>
+						<h2 class="text-2xl font-bold text-white">{ data.Email }</h2>
+						<p class="text-white/60">Account Dashboard</p>
+					</div>
+					<button
+						onclick="logout()"
+						class="bg-red-500/20 hover:bg-red-500/30 text-red-200 px-4 py-2 rounded-lg border border-red-400/50 transition-all"
+					>
+						Logout
+					</button>
+				</div>
+			</div>
+			<!-- Credits Card -->
+			<div class="bg-gradient-to-br from-green-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-white/60 text-sm mb-1">Available Credits</p>
+						if data.Role == "admin" || data.Role == "beta" {
+							<h3 class="text-5xl font-bold text-white">
+								<span class="bg-gradient-to-r from-yellow-400 to-purple-400 bg-clip-text text-transparent">Unlimited</span>
+								<span class="text-green-400 text-2xl ml-2">✨</span>
+							</h3>
+						} else {
+							<h3 class="text-5xl font-bold text-white">
+								{ fmt.Sprintf("%d", data.Credits) }
+								if data.Credits < 0 {
+									<span class="text-red-400 text-2xl ml-2">⚠️ Overdraft</span>
+								} else if data.Credits < 20 {
+									<span class="text-yellow-400 text-2xl ml-2">⚡ Low</span>
+								}
+							</h3>
+						}
+					</div>
+					if data.Role != "admin" && data.Role != "beta" {
+						<div>
+							<button class="bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-6 rounded-lg shadow-lg transition-all">
+								💳 Buy Credits
+							</button>
+						</div>
+					}
+				</div>
+			</div>
+			<!-- Stats Grid -->
+			if data.Role == "admin" || data.Role == "beta" {
+				<!-- Unlimited users: only show generations and duration -->
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+						<p class="text-white/60 text-sm mb-1">Total Generations</p>
+						<p class="text-3xl font-bold text-white">{ fmt.Sprintf("%d", data.TotalRequests) }</p>
+					</div>
+					<div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+						<p class="text-white/60 text-sm mb-1">Avg Duration</p>
+						<p class="text-3xl font-bold text-white">{ fmt.Sprintf("%.1fs", data.AvgDurationMS/1000) }</p>
+					</div>
+				</div>
+			} else {
+				<!-- Regular users: show all stats including credits spent -->
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+						<p class="text-white/60 text-sm mb-1">Total Generations</p>
+						<p class="text-3xl font-bold text-white">{ fmt.Sprintf("%d", data.TotalRequests) }</p>
+					</div>
+					<div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+						<p class="text-white/60 text-sm mb-1">Credits Spent</p>
+						<p class="text-3xl font-bold text-white">{ fmt.Sprintf("%d", data.TotalCreditsUsed) }</p>
+					</div>
+					<div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+						<p class="text-white/60 text-sm mb-1">Avg Duration</p>
+						<p class="text-3xl font-bold text-white">{ fmt.Sprintf("%.1fs", data.AvgDurationMS/1000) }</p>
+					</div>
+				</div>
+			}
+			<!-- Downloads Section for Beta Users -->
+			if data.Role == "admin" || data.Role == "beta" {
+				<div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+					<h3 class="text-xl font-bold text-white mb-4">🎵 Download Musical AIDEAS Plugin</h3>
+					<div class="space-y-4">
+						<p class="text-white/80">
+							Get the latest release of the Musical AIDEAS audio plugin for your DAW.
+						</p>
+						<a
+							href="https://aideas-releases.s3.eu-west-2.amazonaws.com/releases/latest/index.html"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all"
+						>
+							<svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+							</svg>
+							Download Latest Release
+						</a>
+						<div class="mt-4 p-4 bg-blue-500/20 rounded-lg border border-blue-400/30">
+							<p class="text-sm text-blue-200">
+								<strong>Note:</strong> The plugin is available as VST3, AU (macOS), and Standalone app.
+								Download the installer package (.pkg for macOS) or ZIP file (Windows).
+							</p>
+						</div>
+					</div>
+				</div>
+			}
+			<!-- Usage History -->
+			<div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+				<h3 class="text-xl font-bold text-white mb-4">Recent Activity</h3>
+				<div
+					hx-get="/htmx/usage-history"
+					hx-trigger="load"
+					hx-swap="innerHTML"
+					class="text-white/60"
+				>
+					Loading...
+				</div>
+			</div>
+		</div>
+	<script>
+		// Logout function - call API to clear cookies
+		async function logout() {
+			try {
+				const response = await fetch('/api/auth/logout', {
+					method: 'POST',
+					credentials: 'include'
+				});
+
+				// Also clear cookies client-side for immediate effect
+				document.cookie = 'access_token=; Path=/; Domain=.musicalaideas.com; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+				document.cookie = 'refresh_token=; Path=/; Domain=.musicalaideas.com; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+
+				if (response.ok) {
+					// Use replace instead of href to prevent back button issues
+					window.location.replace('/');
+				} else {
+					console.error('Logout failed');
+					// Redirect anyway
+					window.location.replace('/');
+				}
+			} catch (error) {
+				console.error('Logout error:', error);
+				// Redirect anyway
+				window.location.replace('/');
+			}
+		}
+	</script>
+	}
+}

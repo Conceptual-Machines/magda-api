@@ -1,0 +1,170 @@
+name: Deploy with Ansible
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+      skip_build:
+        description: "Skip Docker build and use existing image"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: eu-west-2
+  ECR_REGISTRY: 086060940749.dkr.ecr.eu-west-2.amazonaws.com
+  ECR_REPOSITORY: aideas-api
+
+jobs:
+  build:
+    if: ${{ !inputs.skip_build }}
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      commit_sha: ${{ steps.get-sha.outputs.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get current commit SHA
+        id: get-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=raw,value=${{ steps.get-sha.outputs.sha }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.get-sha.outputs.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    if: ${{ !cancelled() && (needs.build.result == 'success' || inputs.skip_build) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get EC2 instance IP
+        id: get_ec2_ip
+        run: |
+          INSTANCE_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=aideas-api-production" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "ec2_public_ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+          echo "🌐 EC2 IP: $INSTANCE_IP"
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Create known_hosts if it doesn't exist
+          touch ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          # Remove any existing entry for this IP to handle instance recreation
+          ssh-keygen -R ${{ steps.get_ec2_ip.outputs.ec2_public_ip }} 2>/dev/null || true
+          ssh-keyscan -H ${{ steps.get_ec2_ip.outputs.ec2_public_ip }} >> ~/.ssh/known_hosts
+
+      - name: Install Ansible
+        run: |
+          pip install ansible boto3
+          ansible --version
+
+      - name: Update inventory with current IP
+        run: |
+          sed -i "s/ansible_host=[^ ]*/ansible_host=${{ steps.get_ec2_ip.outputs.ec2_public_ip }}/" infra/ansible/inventory.yml
+          cat infra/ansible/inventory.yml
+
+      - name: Deploy with Ansible
+        run: |
+          cd infra/ansible
+          ansible-playbook -i inventory.yml tasks/deploy-app.yml -v \
+            -e "image_tag=${{ needs.build.outputs.image_tag || 'latest' }}" \
+            -e "ansible_user=ubuntu" \
+            --private-key ~/.ssh/deploy_key
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MCP_SERVER_URL: ${{ secrets.MCP_SERVER_URL }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+
+      - name: Verify Deployed SHA
+        run: |
+          echo "Verifying deployed Docker image SHA..."
+          # Get the running container's image
+          RUNNING_IMAGE=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ubuntu@${{ steps.get_ec2_ip.outputs.ec2_public_ip }} "docker ps --format 'table {{.Image}}' | grep aideas-api | head -1")
+          echo "Running image: $RUNNING_IMAGE"
+
+          # Extract SHA from the running image
+          RUNNING_SHA=$(echo "$RUNNING_IMAGE" | cut -d':' -f2)
+          echo "Running SHA: $RUNNING_SHA"
+
+          # Compare with expected SHA
+          EXPECTED_SHA="${{ needs.build.outputs.commit_sha }}"
+          echo "Expected SHA: $EXPECTED_SHA"
+
+          if [ "$RUNNING_SHA" = "$EXPECTED_SHA" ]; then
+            echo "✅ SHA verification successful! Running correct image."
+          else
+            echo "❌ SHA verification failed! Expected: $EXPECTED_SHA, Running: $RUNNING_SHA"
+            exit 1
+          fi
+
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          sleep 30
+          curl -f "https://api.musicalaideas.com/health" || exit 1
+          echo "✅ Deployment verified successfully!"
