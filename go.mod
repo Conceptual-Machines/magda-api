@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151
-	github.com/Conceptual-Machines/magda-agents-go v0.1.5
+	github.com/Conceptual-Machines/magda-agents-go v0.1.6
 	github.com/a-h/templ v0.3.960
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2 v1.39.2
