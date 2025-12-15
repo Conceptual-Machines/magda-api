@@ -21,7 +21,7 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Check if server is running
-BASE_URL=${MAGDA_API_URL:-"http://localhost:8080"}
+BASE_URL=${AIDEAS_API_URL:-"http://localhost:8080"}
 if ! curl -s -f "$BASE_URL/health" > /dev/null 2>&1; then
     echo -e "${RED}❌ Server is not running at $BASE_URL${NC}"
     echo "   Please start the server first: make dev"
@@ -30,8 +30,11 @@ fi
 
 # Test scripts to run
 TESTS=(
+    "test-integration-refactoring.sh:Comprehensive Refactoring Tests"
+    "test-generation.sh:AIDEAS Generation Test"
     "test-magda.sh:MAGDA Integration Test"
     "test-magda-dsl-e2e.sh:MAGDA DSL E2E Test"
+    "test-magda-stream.sh:MAGDA Streaming Test"
 )
 
 PASSED=0
@@ -51,26 +54,18 @@ for test_info in "${TESTS[@]}"; do
     echo -e "${BLUE}▶️  Running: $test_name${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-    # Run test and capture output (let it run fully, don't stop on errors)
-    set +e
-    TEST_OUTPUT=$(bash "$test_script" 2>&1)
-    TEST_EXIT=$?
-    set -e
-
-    # Show test output
-    echo "$TEST_OUTPUT"
-    echo ""
-
-    # Determine result from exit code and output
-    if [ $TEST_EXIT -eq 0 ]; then
+    if bash "$test_script"; then
         echo -e "${GREEN}✅ $test_name: PASSED${NC}"
         ((PASSED++))
-    elif [ $TEST_EXIT -eq 1 ]; then
-        echo -e "${RED}❌ $test_name: FAILED${NC}"
-        ((FAILED++))
     else
-        echo -e "${YELLOW}⚠️  $test_name: SKIPPED${NC}"
-        ((SKIPPED++))
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 1 ]; then
+            echo -e "${RED}❌ $test_name: FAILED${NC}"
+            ((FAILED++))
+        else
+            echo -e "${YELLOW}⚠️  $test_name: SKIPPED${NC}"
+            ((SKIPPED++))
+        fi
     fi
     echo ""
 done

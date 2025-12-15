@@ -116,6 +116,7 @@ func TestMagdaCFGModeRejectsJSON(t *testing.T) {
 			t.Errorf("❌ FAILED: JSON fallback logic is still active! Got set_track_mute instead of delete_track")
 			t.Errorf("Response: %s", responseStr)
 		}
+
 	} else {
 		// If it failed, verify the error message indicates CFG/DSL requirement
 		assert.Contains(t, responseStr, "DSL", "Error should mention DSL requirement")
@@ -174,10 +175,9 @@ func TestMagdaCFGModeOnlyAcceptsDSL(t *testing.T) {
 			// All actions should be valid REAPER actions, not JSON schema actions
 			validActions := []string{
 				"create_track", "create_clip", "create_clip_at_bar",
-				"add_instrument", "add_track_fx", "add_midi",
-				"set_track_name", "set_track_volume", "set_track_pan",
-				"set_track_mute", "set_track_solo", "set_track", "set_clip",
-				"delete_track", "delete_clip",
+				"add_instrument", "add_track_fx", "set_track_name",
+				"set_track_volume", "set_track_pan", "set_track_mute",
+				"set_track_solo", "delete_track", "delete_clip",
 			}
 
 			found := false
@@ -312,7 +312,7 @@ func TestMagdaDeleteTrackGeneratesDSL(t *testing.T) {
 					t.Logf("Warning: No delete_track action found. Actions: %v", actions)
 				}
 			} else {
-				responseStr := w.Body.String()
+				responseStr := string(w.Body.Bytes())
 				t.Errorf("❌ TEST FAILED: LLM did not use CFG tool. This is REQUIRED. Response: %s", responseStr)
 				t.FailNow()
 			}

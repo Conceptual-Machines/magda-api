@@ -18,22 +18,29 @@ echo ""
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# Always load from .env file first
-if [ -f .env ]; then
-    echo -e "${YELLOW}📦 Loading environment from .env...${NC}"
+# Try to load environment from .envrc (if direnv is available)
+if command -v direnv &> /dev/null; then
+    echo -e "${YELLOW}📦 Loading environment from .envrc using direnv...${NC}"
+    eval "$(direnv export bash)"
+elif [ -f .envrc ]; then
+    echo -e "${YELLOW}📦 Loading environment from .envrc (manually)...${NC}"
+    # Source .envrc manually (basic support, doesn't handle all direnv features)
     set -a
-    while IFS= read -r line || [ -n "$line" ]; do
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${line// }" ]] && continue
-        export "$line" 2>/dev/null || true
-    done < .env
+    source <(grep -v '^#' .envrc | grep -v '^$' | sed 's/export //')
     set +a
+fi
+
+# Also try to load from .env file (godotenv will handle this, but ensure it's available)
+if [ -f .env ]; then
+    echo -e "${YELLOW}📦 .env file found${NC}"
+else
+    echo -e "${YELLOW}⚠️  .env file not found, using environment variables${NC}"
 fi
 
 # Check if OPENAI_API_KEY is set
 if [ -z "$OPENAI_API_KEY" ]; then
     echo -e "${RED}❌ ERROR: OPENAI_API_KEY is not set!${NC}"
-    echo "   Please ensure .env file contains OPENAI_API_KEY"
+    echo "   Please ensure .envrc or .env file contains OPENAI_API_KEY"
     exit 1
 fi
 

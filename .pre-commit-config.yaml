@@ -40,7 +40,7 @@ repos:
       - id: go-fmt
       - id: go-vet
       # - id: go-imports  # Disabled - not in PATH
-      - id: golangci-lint
+      # - id: golangci-lint  # Disabled - not in PATH
 
   # Dockerfile linting
   - repo: https://github.com/hadolint/hadolint
