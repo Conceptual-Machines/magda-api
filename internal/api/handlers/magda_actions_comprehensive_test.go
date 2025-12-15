@@ -31,6 +31,7 @@ func TestMagdaTrackCreation(t *testing.T) {
 			name:     "create track with instrument",
 			question: "create a track with Serum",
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateTrack := false
 				hasInstrument := false
 				for _, actionInterface := range actions {
@@ -62,6 +63,7 @@ func TestMagdaTrackCreation(t *testing.T) {
 			name:     "create track with name",
 			question: "create a track called Drums",
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateTrackWithName := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -82,6 +84,7 @@ func TestMagdaTrackCreation(t *testing.T) {
 			name:     "create track with instrument and name",
 			question: "create a track called Bass with Serum",
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateTrack := false
 				hasName := false
 				hasInstrument := false
@@ -178,6 +181,7 @@ func TestMagdaClipOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateClipAtBar := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -212,6 +216,7 @@ func TestMagdaClipOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateClipAtBar := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -290,6 +295,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetVolume := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -322,6 +328,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetPan := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -347,6 +354,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetMute := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -372,6 +380,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetSolo := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -397,6 +406,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetName := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -425,6 +435,7 @@ func TestMagdaTrackPropertySetters(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasSetSelected := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -502,6 +513,7 @@ func TestMagdaAddFX(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasAddFX := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -528,6 +540,7 @@ func TestMagdaAddFX(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasAddInstrument := false
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -608,6 +621,7 @@ func TestMagdaFilterOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				deleteCount := 0
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -637,6 +651,7 @@ func TestMagdaFilterOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				selectCount := 0
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -669,6 +684,7 @@ func TestMagdaFilterOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				unmuteCount := 0
 				for _, actionInterface := range actions {
 					action, ok := actionInterface.(map[string]interface{})
@@ -743,6 +759,7 @@ func TestMagdaMethodChaining(t *testing.T) {
 				"tracks": []map[string]interface{}{},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateTrack := false
 				hasInstrument := false
 				hasCreateClip := false
@@ -784,6 +801,7 @@ func TestMagdaMethodChaining(t *testing.T) {
 				"tracks": []map[string]interface{}{},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				hasCreateTrack := false
 				hasName := false
 				hasInstrument := false
@@ -880,6 +898,7 @@ func TestMagdaForEachOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_track actions with mute=false for all tracks
 				muteActions := 0
 				for _, actionInterface := range actions {
@@ -908,6 +927,7 @@ func TestMagdaForEachOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_selected actions for all tracks
 				selectedActions := 0
 				for _, actionInterface := range actions {
@@ -936,6 +956,7 @@ func TestMagdaForEachOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have add_track_fx actions for all tracks
 				fxActions := 0
 				for _, actionInterface := range actions {
@@ -965,6 +986,7 @@ func TestMagdaForEachOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_track_volume actions for all tracks
 				volumeActions := 0
 				for _, actionInterface := range actions {
@@ -996,6 +1018,7 @@ func TestMagdaForEachOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_track actions with mute=false only for muted tracks (tracks 0 and 2)
 				muteActions := 0
 				trackIndices := make(map[int]bool)
@@ -1090,6 +1113,7 @@ func TestMagdaClipFilteringOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_clip_selected actions for clips with length < 1.5
 				clipSelectionActions := 0
 				for _, actionInterface := range actions {
@@ -1148,6 +1172,7 @@ func TestMagdaClipFilteringOperations(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have set_clip_selected actions for clips with length < 2.0
 				clipSelectionActions := 0
 				trackIndices := make(map[int]bool)
@@ -1258,6 +1283,7 @@ func TestMagdaCompoundActions(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				// Should have both set_clip_selected and set_clip_name actions
 				selectionActions := 0
 				renameActions := 0
@@ -1311,6 +1337,7 @@ func TestMagdaCompoundActions(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				selectionActions := 0
 				colorActions := 0
 
@@ -1350,6 +1377,7 @@ func TestMagdaCompoundActions(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, actions []interface{}) {
+				t.Helper()
 				selectionActions := 0
 				renameActions := 0
 

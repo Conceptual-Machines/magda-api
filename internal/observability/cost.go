@@ -32,20 +32,6 @@ var PricingTable = map[string]ModelPricing{
 		InputPricePer1K:  0.00015, // $0.00015 per 1K input tokens
 		OutputPricePer1K: 0.0006,  // $0.0006 per 1K output tokens
 	},
-	// GPT-3.5 models
-	"gpt-3.5-turbo": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
-	},
-	// Gemini models (example pricing - update with actual rates)
-	"gemini-2.0-flash-exp": {
-		InputPricePer1K:  0.0, // Free tier
-		OutputPricePer1K: 0.0, // Free tier
-	},
-	"gemini-pro": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
-	},
 }
 
 // CalculateOpenAICost calculates the cost in USD for an OpenAI API call
@@ -68,20 +54,6 @@ func CalculateOpenAICost(model string, usage responses.ResponseUsage) float64 {
 
 	totalCost := inputCost + outputCost + reasoningCost
 	return totalCost
-}
-
-// CalculateGeminiCost calculates the cost in USD for a Gemini API call
-func CalculateGeminiCost(model string, inputTokens, outputTokens int64) float64 {
-	pricing, exists := PricingTable[model]
-	if !exists {
-		// Default to gemini-pro pricing if model not found
-		pricing = PricingTable["gemini-pro"]
-	}
-
-	inputCost := (float64(inputTokens) / 1000.0) * pricing.InputPricePer1K
-	outputCost := (float64(outputTokens) / 1000.0) * pricing.OutputPricePer1K
-
-	return inputCost + outputCost
 }
 
 // FormatCost formats a cost value as a USD string

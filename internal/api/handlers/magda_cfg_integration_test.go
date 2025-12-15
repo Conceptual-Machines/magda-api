@@ -116,7 +116,6 @@ func TestMagdaCFGModeRejectsJSON(t *testing.T) {
 			t.Errorf("❌ FAILED: JSON fallback logic is still active! Got set_track_mute instead of delete_track")
 			t.Errorf("Response: %s", responseStr)
 		}
-
 	} else {
 		// If it failed, verify the error message indicates CFG/DSL requirement
 		assert.Contains(t, responseStr, "DSL", "Error should mention DSL requirement")

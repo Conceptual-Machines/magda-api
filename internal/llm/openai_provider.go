@@ -48,10 +48,16 @@ const (
 	// Logging limits
 	maxArgsLogLength       = 100
 	maxLogEventCountOpenAI = 5
-	maxPreviewChars        = 200
-	maxErrorPreviewChars   = 500
-	maxErrorResponseChars  = 200
-	maxPathPreviewLen      = 10
+
+	// String truncation limits for logging
+	logTruncateShort      = 200   // Short truncation for field values
+	logTruncateLong       = 500   // Long truncation for full field values
+	logDumpLimit          = 5000  // Limit for dumping full structures
+	logDumpMaxLimit       = 10000 // Maximum limit for large dumps
+	maxPreviewChars       = 200
+	maxErrorPreviewChars  = 500
+	maxErrorResponseChars = 200
+	maxPathPreviewLen     = 10
 )
 
 // OpenAIProvider implements the Provider interface using OpenAI's Responses API
@@ -513,7 +519,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 ========== CHECKING ALL STRING FIELDS IN OUTPUT ITEM FOR DSL CONTENT ==========")
 					for key, val := range outputItemMap {
 						if strVal, ok := val.(string); ok && strVal != "" {
-							log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, 500))
+							log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, logTruncateLong))
 							if p.isDSLCode(strVal) {
 								log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", key, truncateString(strVal, maxPreviewChars))
 								return &GenerationResponse{
@@ -527,8 +533,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 ========== CHECKING NON-STRING FIELDS (arguments, tools, outputs) ==========")
 					fullDump, _ := json.MarshalIndent(outputItemMap, "", "  ")
 					dumpLen := len(fullDump)
-					if dumpLen > 10000 {
-						dumpLen = 10000
+					if dumpLen > logDumpMaxLimit {
+						dumpLen = logDumpMaxLimit
 					}
 					log.Printf("🔍 FULL OUTPUT ITEM STRUCTURE (first %d chars):\n%s", dumpLen, string(fullDump[:dumpLen]))
 				}
@@ -561,7 +567,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 'arguments' field EXISTS: type=%T", argsVal)
 					// Log the full value for debugging
 					argsJSON, _ := json.Marshal(argsVal)
-					log.Printf("🔍 'arguments' field value (JSON): %s", truncateString(string(argsJSON), 500))
+					log.Printf("🔍 'arguments' field value (JSON): %s", truncateString(string(argsJSON), logTruncateLong))
 					if argsStr, ok := argsVal.(string); ok && argsStr != "" {
 						log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(argsStr, maxPreviewChars))
 						return &GenerationResponse{
@@ -575,7 +581,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 						// Check common fields in arguments map
 						for key, val := range argsMap {
 							if strVal, ok := val.(string); ok && strVal != "" && len(strVal) > 10 {
-								log.Printf("🔍 'arguments[%s]' = %s", key, truncateString(strVal, 200))
+								log.Printf("🔍 'arguments[%s]' = %s", key, truncateString(strVal, logTruncateShort))
 								if p.isDSLCode(strVal) {
 									log.Printf("🔧 Found DSL in arguments[%s]: %s", key, truncateString(strVal, maxPreviewChars))
 									return &GenerationResponse{
@@ -594,7 +600,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if resultVal, exists := outputItemMap["result"]; exists {
 					log.Printf("🔍 'result' field EXISTS: type=%T", resultVal)
 					if resultStr, ok := resultVal.(string); ok && resultStr != "" {
-						log.Printf("🔍 'result' field value (first 200 chars): %s", truncateString(resultStr, 200))
+						log.Printf("🔍 'result' field value (first 200 chars): %s", truncateString(resultStr, logTruncateShort))
 						if p.isDSLCode(resultStr) {
 							log.Printf("🔧 Found CFG tool call result (DSL): %s", truncateString(resultStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -609,7 +615,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if outputVal, exists := outputItemMap["output"]; exists {
 					log.Printf("🔍 'output' field EXISTS: type=%T", outputVal)
 					if outputStr, ok := outputVal.(string); ok && outputStr != "" {
-						log.Printf("🔍 'output' field value (first 200 chars): %s", truncateString(outputStr, 200))
+						log.Printf("🔍 'output' field value (first 200 chars): %s", truncateString(outputStr, logTruncateShort))
 						if p.isDSLCode(outputStr) {
 							log.Printf("🔧 Found CFG tool call output (DSL): %s", truncateString(outputStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -624,7 +630,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if contentVal, exists := outputItemMap["content"]; exists {
 					log.Printf("🔍 'content' field EXISTS: type=%T", contentVal)
 					if contentStr, ok := contentVal.(string); ok && contentStr != "" {
-						log.Printf("🔍 'content' field value (first 200 chars): %s", truncateString(contentStr, 200))
+						log.Printf("🔍 'content' field value (first 200 chars): %s", truncateString(contentStr, logTruncateShort))
 						if p.isDSLCode(contentStr) {
 							log.Printf("🔧 Found CFG tool call content (DSL): %s", truncateString(contentStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -735,8 +741,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 			for i, outputItem := range resp.Output {
 				outputItemJSON, _ := json.MarshalIndent(outputItem, "", "  ")
 				dumpLen := len(outputItemJSON)
-				if dumpLen > 5000 {
-					dumpLen = 5000
+				if dumpLen > logDumpLimit {
+					dumpLen = logDumpLimit
 				}
 				log.Printf("🔍 Output item %d (first %d chars):\n%s", i, dumpLen, string(outputItemJSON[:dumpLen]))
 			}
@@ -763,7 +769,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 						// Check for any string field that might contain DSL
 						for key, val := range outputItemMap {
 							if strVal, ok := val.(string); ok && len(strVal) > 10 {
-								log.Printf("🔍 Found string field '%s' with %d chars: %s", key, len(strVal), truncateString(strVal, 200))
+								log.Printf("🔍 Found string field '%s' with %d chars: %s", key, len(strVal), truncateString(strVal, logTruncateShort))
 								// If it looks like DSL code (contains track(), newClip(), etc.), use it
 								if strings.Contains(strVal, "track(") || strings.Contains(strVal, "delete_track") || strings.Contains(strVal, "create_track") {
 									log.Printf("🔧 Found DSL-like content in field '%s', using as output", key)
