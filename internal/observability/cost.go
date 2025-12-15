@@ -6,6 +6,23 @@ import (
 	"github.com/openai/openai-go/responses"
 )
 
+// Pricing constants per 1K tokens (in USD)
+const (
+	priceGPT51Input      = 0.001   // $0.001 per 1K input tokens
+	priceGPT51Output     = 0.003   // $0.003 per 1K output tokens
+	priceGPT51MiniInput  = 0.0005  // $0.0005 per 1K input tokens
+	priceGPT51MiniOutput = 0.0015  // $0.0015 per 1K output tokens
+	priceGPT4oInput      = 0.005   // $0.005 per 1K input tokens
+	priceGPT4oOutput     = 0.015   // $0.015 per 1K output tokens
+	priceGPT4oMiniInput  = 0.00015 // $0.00015 per 1K input tokens
+	priceGPT4oMiniOutput = 0.0006  // $0.0006 per 1K output tokens
+	priceGPT35Input      = 0.0005  // $0.0005 per 1K input tokens
+	priceGPT35Output     = 0.0015  // $0.0015 per 1K output tokens
+	priceGeminiInput     = 0.0005  // $0.0005 per 1K input tokens
+	priceGeminiOutput    = 0.0015  // $0.0015 per 1K output tokens
+	priceFree            = 0.0     // Free tier
+)
+
 // ModelPricing contains pricing information per 1K tokens
 type ModelPricing struct {
 	InputPricePer1K  float64 // Price per 1K input tokens in USD
@@ -16,35 +33,35 @@ type ModelPricing struct {
 var PricingTable = map[string]ModelPricing{
 	// GPT-5.1 models (example pricing - update with actual rates)
 	"gpt-5.1": {
-		InputPricePer1K:  0.001, // $0.001 per 1K input tokens
-		OutputPricePer1K: 0.003, // $0.003 per 1K output tokens
+		InputPricePer1K:  priceGPT51Input,
+		OutputPricePer1K: priceGPT51Output,
 	},
 	"gpt-5.1-mini": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
+		InputPricePer1K:  priceGPT51MiniInput,
+		OutputPricePer1K: priceGPT51MiniOutput,
 	},
 	// GPT-4 models
 	"gpt-4o": {
-		InputPricePer1K:  0.005, // $0.005 per 1K input tokens
-		OutputPricePer1K: 0.015, // $0.015 per 1K output tokens
+		InputPricePer1K:  priceGPT4oInput,
+		OutputPricePer1K: priceGPT4oOutput,
 	},
 	"gpt-4o-mini": {
-		InputPricePer1K:  0.00015, // $0.00015 per 1K input tokens
-		OutputPricePer1K: 0.0006,  // $0.0006 per 1K output tokens
+		InputPricePer1K:  priceGPT4oMiniInput,
+		OutputPricePer1K: priceGPT4oMiniOutput,
 	},
 	// GPT-3.5 models
 	"gpt-3.5-turbo": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
+		InputPricePer1K:  priceGPT35Input,
+		OutputPricePer1K: priceGPT35Output,
 	},
 	// Gemini models (example pricing - update with actual rates)
 	"gemini-2.0-flash-exp": {
-		InputPricePer1K:  0.0, // Free tier
-		OutputPricePer1K: 0.0, // Free tier
+		InputPricePer1K:  priceFree,
+		OutputPricePer1K: priceFree,
 	},
 	"gemini-pro": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
+		InputPricePer1K:  priceGeminiInput,
+		OutputPricePer1K: priceGeminiOutput,
 	},
 }
 

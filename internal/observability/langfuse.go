@@ -238,9 +238,9 @@ func (g *Generation) LogOpenAIResponseStruct(
 		InputCost:  0, // Will be calculated if needed
 		OutputCost: 0, // Will be calculated if needed
 	}
-	if resp.Usage.OutputTokensDetails.ReasoningTokens > 0 {
-		// Note: SDK may not support reasoning tokens directly
-	}
+	// Note: SDK may not support reasoning tokens directly
+	// Reasoning tokens are included in OutputTokens, so no separate handling needed
+	_ = resp.Usage.OutputTokensDetails.ReasoningTokens
 
 	// Calculate cost
 	cost := CalculateOpenAICost(modelName, resp.Usage)
