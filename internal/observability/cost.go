@@ -6,6 +6,28 @@ import (
 	"github.com/openai/openai-go/responses"
 )
 
+// Pricing constants
+const (
+	tokensPerKilo       = 1000.0
+	costFormatPrecision = 6
+
+	// GPT-5.1 pricing
+	gpt51InputPrice  = 0.001
+	gpt51OutputPrice = 0.003
+
+	// GPT-5.1-mini pricing
+	gpt51MiniInputPrice  = 0.0005
+	gpt51MiniOutputPrice = 0.0015
+
+	// GPT-4o pricing
+	gpt4oInputPrice  = 0.005
+	gpt4oOutputPrice = 0.015
+
+	// GPT-4o-mini pricing
+	gpt4oMiniInputPrice  = 0.00015
+	gpt4oMiniOutputPrice = 0.0006
+)
+
 // ModelPricing contains pricing information per 1K tokens
 type ModelPricing struct {
 	InputPricePer1K  float64 // Price per 1K input tokens in USD
@@ -16,21 +38,21 @@ type ModelPricing struct {
 var PricingTable = map[string]ModelPricing{
 	// GPT-5.1 models (example pricing - update with actual rates)
 	"gpt-5.1": {
-		InputPricePer1K:  0.001, // $0.001 per 1K input tokens
-		OutputPricePer1K: 0.003, // $0.003 per 1K output tokens
+		InputPricePer1K:  gpt51InputPrice,
+		OutputPricePer1K: gpt51OutputPrice,
 	},
 	"gpt-5.1-mini": {
-		InputPricePer1K:  0.0005, // $0.0005 per 1K input tokens
-		OutputPricePer1K: 0.0015, // $0.0015 per 1K output tokens
+		InputPricePer1K:  gpt51MiniInputPrice,
+		OutputPricePer1K: gpt51MiniOutputPrice,
 	},
 	// GPT-4 models
 	"gpt-4o": {
-		InputPricePer1K:  0.005, // $0.005 per 1K input tokens
-		OutputPricePer1K: 0.015, // $0.015 per 1K output tokens
+		InputPricePer1K:  gpt4oInputPrice,
+		OutputPricePer1K: gpt4oOutputPrice,
 	},
 	"gpt-4o-mini": {
-		InputPricePer1K:  0.00015, // $0.00015 per 1K input tokens
-		OutputPricePer1K: 0.0006,  // $0.0006 per 1K output tokens
+		InputPricePer1K:  gpt4oMiniInputPrice,
+		OutputPricePer1K: gpt4oMiniOutputPrice,
 	},
 }
 
@@ -42,14 +64,14 @@ func CalculateOpenAICost(model string, usage responses.ResponseUsage) float64 {
 		pricing = PricingTable["gpt-5.1"]
 	}
 
-	inputCost := (float64(usage.InputTokens) / 1000.0) * pricing.InputPricePer1K
-	outputCost := (float64(usage.OutputTokens) / 1000.0) * pricing.OutputPricePer1K
+	inputCost := (float64(usage.InputTokens) / tokensPerKilo) * pricing.InputPricePer1K
+	outputCost := (float64(usage.OutputTokens) / tokensPerKilo) * pricing.OutputPricePer1K
 
 	// Add reasoning tokens if present
 	reasoningCost := 0.0
 	if usage.OutputTokensDetails.ReasoningTokens > 0 {
 		// Reasoning tokens typically cost the same as input tokens
-		reasoningCost = (float64(usage.OutputTokensDetails.ReasoningTokens) / 1000.0) * pricing.InputPricePer1K
+		reasoningCost = (float64(usage.OutputTokensDetails.ReasoningTokens) / tokensPerKilo) * pricing.InputPricePer1K
 	}
 
 	totalCost := inputCost + outputCost + reasoningCost
@@ -58,8 +80,8 @@ func CalculateOpenAICost(model string, usage responses.ResponseUsage) float64 {
 
 // FormatCost formats a cost value as a USD string
 func FormatCost(cost float64) string {
-	// Format with 6 decimal places for precision
-	return "$" + formatFloat(cost, 6)
+	// Format with specified precision for precision
+	return "$" + formatFloat(cost, costFormatPrecision)
 }
 
 // formatFloat formats a float with specified precision using strconv

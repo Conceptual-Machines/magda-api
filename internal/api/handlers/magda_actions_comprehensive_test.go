@@ -1240,6 +1240,7 @@ func TestMagdaClipFilteringOperations(t *testing.T) {
 
 // Helper function to skip test if API key is missing
 func skipIfAPIKeyMissing(t *testing.T, responseBody []byte) {
+	t.Helper()
 	var errorResponse map[string]interface{}
 	if err := json.Unmarshal(responseBody, &errorResponse); err == nil {
 		if errorMsg, ok := errorResponse["error"].(string); ok {
@@ -1315,7 +1316,8 @@ func TestMagdaCompoundActions(t *testing.T) {
 				}
 
 				// Should have at least 3 selection actions (clips at index 0, 1, 3 are < 1 bar)
-				assert.GreaterOrEqual(t, selectionActions, 3, "Should have at least 3 set_clip actions with selected=true for clips shorter than one bar")
+				assert.GreaterOrEqual(t, selectionActions, 3,
+					"Should have at least 3 set_clip actions with selected=true for clips shorter than one bar")
 				// Should have at least 3 rename actions (same clips)
 				assert.GreaterOrEqual(t, renameActions, 3, "Should have at least 3 set_clip actions with name for clips shorter than one bar")
 			},

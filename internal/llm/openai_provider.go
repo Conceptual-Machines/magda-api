@@ -441,7 +441,8 @@ func (p *OpenAIProvider) validateCFGOutput(textOutput string) error {
 	if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
 		log.Printf("❌ CFG was configured but LLM generated JSON instead of using CFG tool")
 		log.Printf("❌ JSON output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. LLM must use the CFG tool to generate DSL code")
+		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. " +
+			"LLM must use the CFG tool to generate DSL code")
 	}
 
 	// Otherwise it's invalid
@@ -783,7 +784,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					}
 				}
 			}
-			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. LLM must use the CFG tool to generate DSL code")
+			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. " +
+				"LLM must use the CFG tool to generate DSL code")
 		}
 		return nil, fmt.Errorf("openai response did not include any output text")
 	}
