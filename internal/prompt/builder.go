@@ -19,4 +19,3 @@ func (b *Builder) BuildPromptWithFormat(format string) (string, error) {
 	// TODO: Implement proper prompt building
 	return "", nil
 }
-

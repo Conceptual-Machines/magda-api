@@ -60,3 +60,4 @@ ssl/
 .envrc
 aideas-api
 eval_results_*.json
+.env.bak

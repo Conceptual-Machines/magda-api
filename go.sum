@@ -8,8 +8,8 @@ cloud.google.com/go/compute/metadata v0.5.0/go.mod h1:aHnloV2TPI38yx4s9+wAZhHykW
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151 h1:xBQjA7Y4IxlA1AoCrkCPROGNfwxZxlt95gL89unUDkM=
 github.com/Conceptual-Machines/grammar-school-go v0.6.1-0.20251209221559-b28f4a271151/go.mod h1:4qhDvJBDaZWf3uNyBkfc46RwCa3zm/Bh8X30+SRtVGQ=
-github.com/Conceptual-Machines/magda-agents-go v0.1.2 h1:QJzIhfoEGl+DRfXk/pcqmxy5jgj2Wfw3VOfdugnBID0=
-github.com/Conceptual-Machines/magda-agents-go v0.1.2/go.mod h1:KJe+HKSb4LUwHqjIbzbkHQuVuyQPxq4fD5J0QC0z67Y=
+github.com/Conceptual-Machines/magda-agents-go v0.1.5 h1:N5xrENacOKU9ji+/X5b1G0zbN99GV8tl4Gfcuh8p+Wg=
+github.com/Conceptual-Machines/magda-agents-go v0.1.5/go.mod h1:KJe+HKSb4LUwHqjIbzbkHQuVuyQPxq4fD5J0QC0z67Y=
 github.com/a-h/templ v0.3.960 h1:trshEpGa8clF5cdI39iY4ZrZG8Z/QixyzEyUnA7feTM=
 github.com/a-h/templ v0.3.960/go.mod h1:oCZcnKRf5jjsGpf2yELzQfodLphd2mwecwG4Crk5HBo=
 github.com/aws/aws-sdk-go v1.55.8 h1:JRmEUbU52aJQZ2AjX4q4Wu7t4uZjOu71uyNmaWlUkJQ=

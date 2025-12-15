@@ -56,11 +56,11 @@ for test_info in "${TESTS[@]}"; do
     TEST_OUTPUT=$(bash "$test_script" 2>&1)
     TEST_EXIT=$?
     set -e
-    
+
     # Show test output
     echo "$TEST_OUTPUT"
     echo ""
-    
+
     # Determine result from exit code and output
     if [ $TEST_EXIT -eq 0 ]; then
         echo -e "${GREEN}✅ $test_name: PASSED${NC}"

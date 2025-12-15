@@ -31,4 +31,3 @@ type MusicalChoice struct {
 type MusicalOutput struct {
 	Choices []MusicalChoice `json:"choices"`
 }
-

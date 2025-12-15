@@ -66,7 +66,7 @@ if echo "$RESPONSE" | jq -e '.actions' > /dev/null 2>&1; then
     ACTION_COUNT=$(echo "$RESPONSE" | jq '.actions | length')
     echo "✅ Received $ACTION_COUNT actions"
     echo ""
-    
+
     if [ "$ACTION_COUNT" -gt 0 ]; then
         echo "Actions:"
         echo "$RESPONSE" | jq -c '.actions[]' | head -5

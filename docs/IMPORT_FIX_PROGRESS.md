@@ -38,13 +38,3 @@
 - Would need to duplicate or restructure
 
 **Recommendation:** Option A - make packages public since they're meant to be imported
-
-
-
-
-
-
-
-
-
-

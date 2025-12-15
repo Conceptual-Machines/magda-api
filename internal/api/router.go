@@ -30,7 +30,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 	router.Static("/static", "./static")
 
 	// Health check
-	router.GET("/health", handlers.HealthCheck)
+	healthHandler := handlers.NewHealthHandler(db)
+	router.GET("/health", healthHandler.HealthCheck)
 
 	// MCP status endpoint
 	router.GET("/mcp/status", handlers.MCPStatus)

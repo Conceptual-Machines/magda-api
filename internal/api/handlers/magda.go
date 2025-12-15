@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/Conceptual-Machines/magda-api/internal/config"
-	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	magdaorchestrator "github.com/Conceptual-Machines/magda-agents-go/agents/coordination"
 	magdadaw "github.com/Conceptual-Machines/magda-agents-go/agents/daw"
 	magdaplugin "github.com/Conceptual-Machines/magda-agents-go/agents/plugin"
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
+	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

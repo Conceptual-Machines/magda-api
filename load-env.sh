@@ -17,4 +17,3 @@ if [ -f "$ENV_FILE" ]; then
     done < "$ENV_FILE"
     set +a
 fi
-

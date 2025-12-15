@@ -40,7 +40,7 @@ func main() {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              cfg.SentryDSN,
 			Environment:      cfg.Environment,
-			Release:          "magda-api@" + releaseVersion,           // Use embedded release version
+			Release:          "magda-api@" + releaseVersion,            // Use embedded release version
 			EnableTracing:    true,                                     // Enable tracing for spans
 			TracesSampleRate: 1.0,                                      // 100% sampling for now, adjust based on volume
 			EnableLogs:       true,                                     // Enable Sentry Logs feature

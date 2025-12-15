@@ -106,13 +106,3 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
     // ... return response ...
 }
 ```
-
-
-
-
-
-
-
-
-
-
