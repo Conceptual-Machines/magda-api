@@ -38,8 +38,8 @@ var PricingTable = map[string]ModelPricing{
 func CalculateOpenAICost(model string, usage responses.ResponseUsage) float64 {
 	pricing, exists := PricingTable[model]
 	if !exists {
-		// Default to GPT-4 pricing if model not found
-		pricing = PricingTable["gpt-4o"]
+		// Default to GPT-5.1 pricing if model not found
+		pricing = PricingTable["gpt-5.1"]
 	}
 
 	inputCost := (float64(usage.InputTokens) / 1000.0) * pricing.InputPricePer1K
