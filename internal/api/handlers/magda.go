@@ -15,6 +15,7 @@ import (
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
+	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -103,16 +104,38 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 		log.Printf("   User ID: %d", userID)
 	}
 
+	// Start Langfuse trace for observability
+	trace := observability.GetClient().StartTrace(c.Request.Context(), "magda-chat", map[string]interface{}{
+		"question": req.Question,
+		"user_id":  userID,
+	})
+	defer trace.Finish()
+
 	// Generate actions from question and state using orchestrator
 	log.Printf("🚀 MAGDA Chat: Calling Orchestrator.GenerateActions")
+	gen := trace.Generation("orchestrator", map[string]interface{}{
+		"question": req.Question,
+	})
+	gen.Input(req.Question)
+
 	result, err := h.orchestrator.GenerateActions(c.Request.Context(), req.Question, req.State)
 	if err != nil {
 		log.Printf("❌ MAGDA Chat: GenerateActions error: %v", err)
 		log.Printf("   Error type: %T", err)
 		log.Printf("   Stack trace:\n%s", string(debug.Stack()))
+		gen.SetLevel("ERROR")
+		gen.Output(err.Error())
+		gen.Finish()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Log result to Langfuse
+	gen.Output(result.Actions)
+	gen.Metadata(map[string]interface{}{
+		"actions_count": len(result.Actions),
+	})
+	gen.Finish()
 
 	// Log result
 	log.Printf("✅ MAGDA Chat: GenerateActions succeeded")
