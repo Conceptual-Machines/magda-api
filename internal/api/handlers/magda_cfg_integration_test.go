@@ -311,8 +311,7 @@ func TestMagdaDeleteTrackGeneratesDSL(t *testing.T) {
 					t.Logf("Warning: No delete_track action found. Actions: %v", actions)
 				}
 			} else {
-				responseStr := string(w.Body.Bytes())
-				t.Errorf("❌ TEST FAILED: LLM did not use CFG tool. This is REQUIRED. Response: %s", responseStr)
+				t.Errorf("❌ TEST FAILED: LLM did not use CFG tool. This is REQUIRED. Response: %s", w.Body.String())
 				t.FailNow()
 			}
 		})

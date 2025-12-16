@@ -132,7 +132,7 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
 }
 
 // generateOneShot handles non-streaming one-shot generation
-func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, userID uint, model string) {
+func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, _ uint, model string) {
 	startTime := time.Now()
 
 	// Use reasoning mode from request, default to "medium" for GPT-5

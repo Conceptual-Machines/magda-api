@@ -15,7 +15,7 @@ const OutputFormatDSL = "dsl"
 const OutputFormatJSON = "json"
 
 // BuildPromptWithFormat builds a system prompt for the given output format
-func (b *Builder) BuildPromptWithFormat(format string) (string, error) {
+func (b *Builder) BuildPromptWithFormat(_ string) (string, error) {
 	// TODO: Implement proper prompt building
 	return "", nil
 }

@@ -32,7 +32,7 @@ func (f *ProviderFactory) GetProvider(ctx context.Context, model, providerName s
 }
 
 // getProviderByName creates a provider by explicit name
-func (f *ProviderFactory) getProviderByName(ctx context.Context, providerName string) (Provider, error) {
+func (f *ProviderFactory) getProviderByName(_ context.Context, providerName string) (Provider, error) {
 	switch strings.ToLower(providerName) {
 	case "openai":
 		if f.openaiAPIKey == "" {
@@ -46,7 +46,7 @@ func (f *ProviderFactory) getProviderByName(ctx context.Context, providerName st
 }
 
 // getProviderByModel infers provider from model name
-func (f *ProviderFactory) getProviderByModel(ctx context.Context, model string) (Provider, error) {
+func (f *ProviderFactory) getProviderByModel(_ context.Context, model string) (Provider, error) {
 	modelLower := strings.ToLower(model)
 
 	// GPT models use OpenAI

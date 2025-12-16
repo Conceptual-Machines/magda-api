@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
@@ -72,6 +74,7 @@ issues:
         - dupl
         - gomnd
         - gocyclo
+        - goconst
     # Allow stuttering in internal agent packages (daw.DawAgent, plugin.PluginAgent, etc.)
     # This is acceptable for internal packages where the package name provides context
     - path: internal/agents/.*\.go

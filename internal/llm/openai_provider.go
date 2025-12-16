@@ -173,8 +173,8 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
 				requestFile := "/tmp/openai_request_full.json"
 				log.Printf("🔍 DEBUG: About to write request file: %s", requestFile)
-				if err := os.WriteFile(requestFile, prettyJSON, 0644); err != nil {
-					log.Printf("❌ FAILED to save request: %v", err)
+				if writeErr := os.WriteFile(requestFile, prettyJSON, 0644); writeErr != nil {
+					log.Printf("❌ FAILED to save request: %v", writeErr)
 				} else {
 					log.Printf("💾 Saved FULL request payload to %s (%d bytes)", requestFile, len(prettyJSON))
 				}
@@ -197,8 +197,8 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 				// Save full response payload to file
 				if request.CFGGrammar != nil && httpResp.StatusCode == http.StatusOK {
 					responseFile := "/tmp/openai_response_full.json"
-					if err := os.WriteFile(responseFile, body, 0644); err != nil {
-						log.Printf("❌ FAILED to save response: %v", err)
+					if writeErr := os.WriteFile(responseFile, body, 0644); writeErr != nil {
+						log.Printf("❌ FAILED to save response: %v", writeErr)
 					} else {
 						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
 					}
@@ -405,6 +405,25 @@ func getMapKeys(m map[string]any) []string {
 	return keys
 }
 
+// extractCFGCodeFromArray extracts CFG code or input from an array of tool/output maps
+func extractCFGCodeFromArray(items []any, arrayName string) string {
+	log.Printf("🔍 Found '%s' array with %d items", arrayName, len(items))
+	for j, item := range items {
+		if itemMap, ok := item.(map[string]any); ok {
+			log.Printf("🔍 %s[%d] keys: %v", arrayName, j, getMapKeys(itemMap))
+			if code, ok := itemMap["code"].(string); ok && code != "" {
+				log.Printf("🔧 Found CFG tool call code in %s[%d] (DSL): %s", arrayName, j, truncateString(code, maxPreviewChars))
+				return code
+			}
+			if input, ok := itemMap["input"].(string); ok && input != "" {
+				log.Printf("🔧 Found CFG tool call input in %s[%d] (DSL): %s", arrayName, j, truncateString(input, maxPreviewChars))
+				return input
+			}
+		}
+	}
+	return ""
+}
+
 // truncateString truncates a string to a maximum length
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -496,16 +515,13 @@ func (p *OpenAIProvider) processResponseWithCFG(
 							Usage:     resp.Usage,
 						}, nil
 					}
-					// Try interface{} that might contain string
-					if codeStr, ok := codeVal.(interface{}); ok {
-						log.Printf("🔍 code is interface{}, trying to convert")
-						if str, ok := codeStr.(string); ok && str != "" {
-							log.Printf("🔧 Found CFG code after interface conversion: %s", truncateString(str, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: str,
-								Usage:     resp.Usage,
-							}, nil
-						}
+					// Try converting to string directly
+					if str, ok := codeVal.(string); ok && str != "" {
+						log.Printf("🔧 Found CFG code (direct string): %s", truncateString(str, maxPreviewChars))
+						return &GenerationResponse{
+							RawOutput: str,
+							Usage:     resp.Usage,
+						}, nil
 					}
 					// Log what we actually got
 					log.Printf("🔍 code value (raw): %+v", codeVal)
@@ -643,48 +659,14 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				}
 				// Check "tools" array
 				if tools, ok := outputItemMap["tools"].([]any); ok && len(tools) > 0 {
-					log.Printf("🔍 Found 'tools' array with %d items", len(tools))
-					for j, tool := range tools {
-						if toolMap, ok := tool.(map[string]any); ok {
-							log.Printf("🔍 Tool %d keys: %v", j, getMapKeys(toolMap))
-							if code, ok := toolMap["code"].(string); ok && code != "" {
-								log.Printf("🔧 Found CFG tool call code in tools[%d] (DSL): %s", j, truncateString(code, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: code,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							if input, ok := toolMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in tools[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-						}
+					if code := extractCFGCodeFromArray(tools, "tools"); code != "" {
+						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
 					}
 				}
 				// Check "outputs" array
 				if outputs, ok := outputItemMap["outputs"].([]any); ok && len(outputs) > 0 {
-					log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
-					for j, output := range outputs {
-						if outputMap, ok := output.(map[string]any); ok {
-							log.Printf("🔍 Output %d keys: %v", j, getMapKeys(outputMap))
-							if code, ok := outputMap["code"].(string); ok && code != "" {
-								log.Printf("🔧 Found CFG tool call code in outputs[%d] (DSL): %s", j, truncateString(code, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: code,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							if input, ok := outputMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in outputs[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-						}
+					if code := extractCFGCodeFromArray(outputs, "outputs"); code != "" {
+						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
 					}
 				}
 				// Direct "input" field (tool call input)
