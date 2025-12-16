@@ -66,6 +66,14 @@ func main() {
 	}
 
 	// Initialize Langfuse for LLM observability
+	// Set environment variables for the SDK (it reads from env vars)
+	if cfg.LangfuseEnabled && cfg.LangfuseSecretKey != "" {
+		os.Setenv("LANGFUSE_PUBLIC_KEY", cfg.LangfusePublicKey)
+		os.Setenv("LANGFUSE_SECRET_KEY", cfg.LangfuseSecretKey)
+		if cfg.LangfuseHost != "" {
+			os.Setenv("LANGFUSE_HOST", cfg.LangfuseHost)
+		}
+	}
 	observability.InitializeLangfuse(context.Background(), cfg)
 
 	// Initialize database

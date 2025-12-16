@@ -105,17 +105,25 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 	}
 
 	// Start Langfuse trace for observability
-	trace := observability.GetClient().StartTrace(c.Request.Context(), "magda-chat", map[string]interface{}{
+	lfClient := observability.GetClient()
+	log.Printf("🔍 Langfuse: Client enabled: %v", lfClient.IsEnabled())
+	trace := lfClient.StartTrace(c.Request.Context(), "magda-chat", map[string]interface{}{
 		"question": req.Question,
 		"user_id":  userID,
 	})
-	defer trace.Finish()
+	log.Printf("🔍 Langfuse: Trace created, will finish on defer")
+	defer func() {
+		log.Printf("🔍 Langfuse: Finishing trace...")
+		trace.Finish()
+		log.Printf("🔍 Langfuse: Trace finished")
+	}()
 
 	// Generate actions from question and state using orchestrator
 	log.Printf("🚀 MAGDA Chat: Calling Orchestrator.GenerateActions")
 	gen := trace.Generation("orchestrator", map[string]interface{}{
 		"question": req.Question,
 	})
+	log.Printf("🔍 Langfuse: Generation span created")
 	gen.Input(req.Question)
 
 	result, err := h.orchestrator.GenerateActions(c.Request.Context(), req.Question, req.State)
@@ -131,11 +139,14 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 	}
 
 	// Log result to Langfuse
+	log.Printf("🔍 Langfuse: Setting generation output (%d actions)", len(result.Actions))
 	gen.Output(result.Actions)
 	gen.Metadata(map[string]interface{}{
 		"actions_count": len(result.Actions),
 	})
+	log.Printf("🔍 Langfuse: Finishing generation span...")
 	gen.Finish()
+	log.Printf("🔍 Langfuse: Generation span finished")
 
 	// Log result
 	log.Printf("✅ MAGDA Chat: GenerateActions succeeded")

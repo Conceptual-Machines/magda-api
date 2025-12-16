@@ -127,14 +127,20 @@ func (t *Trace) Generation(name string, metadata map[string]interface{}) *Genera
 
 // Finish completes the trace and flushes data to Langfuse
 func (t *Trace) Finish() {
-	if t.enabled && t.client != nil {
-		// Flush ensures all batched events are sent
-		// The SDK batches events and sends them asynchronously
-		// Flush() waits for all queued events to be sent
-		log.Printf("🔍 Langfuse: Flushing trace %s...", t.trace.ID)
-		t.client.Flush(t.ctx)
-		log.Printf("🔍 Langfuse: Flush completed for trace %s (check dashboard in a few seconds)", t.trace.ID)
+	if !t.enabled {
+		log.Printf("🔍 Langfuse: Trace not enabled, skipping finish")
+		return
 	}
+	if t.client == nil {
+		log.Printf("🔍 Langfuse: Client is nil, skipping finish")
+		return
+	}
+	// Flush ensures all batched events are sent
+	// The SDK batches events and sends them asynchronously
+	// Flush() waits for all queued events to be sent
+	log.Printf("🔍 Langfuse: Flushing trace %s...", t.trace.ID)
+	t.client.Flush(t.ctx)
+	log.Printf("🔍 Langfuse: Flush completed for trace %s (check dashboard in a few seconds)", t.trace.ID)
 }
 
 // SetMetadata adds metadata to the trace
