@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/api"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/Conceptual-Machines/magda-api/internal/database"
+	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -62,6 +64,9 @@ func main() {
 	} else {
 		log.Println("⚠️  Sentry not configured (SENTRY_DSN not set)")
 	}
+
+	// Initialize Langfuse for LLM observability
+	observability.InitializeLangfuse(context.Background(), cfg)
 
 	// Initialize database
 	db, err := database.Connect(cfg.DatabaseURL)
