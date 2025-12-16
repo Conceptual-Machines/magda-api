@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -28,8 +27,6 @@ const (
 	developerRole  = "developer"
 	maxOutputTrunc = 200
 	mcpCallType    = "mcp_call"
-	// File permission for debug files
-	debugFilePerms = 0644
 
 	// Reasoning effort levels (GPT-5.2 supports: none, low, medium, high, xhigh)
 	reasoningNone    = "none" // Default in GPT-5.2, lowest latency
@@ -169,19 +166,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 			modifiedJSON, _ := json.Marshal(paramsMap)
 
-			// Save full request payload to file
-			log.Printf("🔍 DEBUG: request.CFGGrammar != nil = %v", request.CFGGrammar != nil)
-			if request.CFGGrammar != nil {
-				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
-				requestFile := "/tmp/openai_request_full.json"
-				log.Printf("🔍 DEBUG: About to write request file: %s", requestFile)
-				if writeErr := os.WriteFile(requestFile, prettyJSON, debugFilePerms); writeErr != nil {
-					log.Printf("❌ FAILED to save request: %v", writeErr)
-				} else {
-					log.Printf("💾 Saved FULL request payload to %s (%d bytes)", requestFile, len(prettyJSON))
-				}
-			}
-
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
 			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
@@ -195,16 +179,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 					}
 				}()
 				body, _ := io.ReadAll(httpResp.Body)
-
-				// Save full response payload to file
-				if request.CFGGrammar != nil && httpResp.StatusCode == http.StatusOK {
-					responseFile := "/tmp/openai_response_full.json"
-					if writeErr := os.WriteFile(responseFile, body, debugFilePerms); writeErr != nil {
-						log.Printf("❌ FAILED to save response: %v", writeErr)
-					} else {
-						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
-					}
-				}
 
 				if httpResp.StatusCode == http.StatusOK {
 					resp = &responses.Response{}
