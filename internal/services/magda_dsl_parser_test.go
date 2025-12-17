@@ -101,7 +101,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 					"length_bars": 4,
 				},
 				{
-					"action":    "set_track_volume",
+					"action":    "set_track",
 					"track":     0,
 					"volume_db": -3.0,
 				},
@@ -118,7 +118,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action": "set_track_pan",
+					"action": "set_track",
 					"track":  0,
 					"pan":    0.5,
 				},
@@ -135,7 +135,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action": "set_track_mute",
+					"action": "set_track",
 					"track":  0,
 					"mute":   true,
 				},
@@ -152,7 +152,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action": "set_track_solo",
+					"action": "set_track",
 					"track":  0,
 					"solo":   false,
 				},
@@ -169,7 +169,7 @@ func TestDSLParser_ParseDSL(t *testing.T) {
 					"index":      0,
 				},
 				{
-					"action": "set_track_name",
+					"action": "set_track",
 					"track":  0,
 					"name":   "My Track",
 				},
@@ -607,8 +607,8 @@ func TestDSLParser_parseVolumeCall(t *testing.T) {
 				return
 			}
 			if !tt.wantErr {
-				if got["action"] != "set_track_volume" {
-					t.Errorf("parseVolumeCall() action = %v, want set_track_volume", got["action"])
+				if got["action"] != "set_track" {
+					t.Errorf("parseVolumeCall() action = %v, want set_track", got["action"])
 				}
 				if got["volume_db"] != tt.wantVolume {
 					t.Errorf("parseVolumeCall() volume_db = %v, want %v", got["volume_db"], tt.wantVolume)

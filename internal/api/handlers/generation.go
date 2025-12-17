@@ -9,8 +9,8 @@ import (
 
 	magdaarranger "github.com/Conceptual-Machines/magda-agents-go/agents/arranger"
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
-	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
+	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/responses"
 	"gorm.io/gorm"
@@ -27,7 +27,6 @@ type GenerationHandler struct {
 	db         *gorm.DB
 	cfg        *config.Config
 }
-
 
 func NewGenerationHandler(cfg *config.Config, db *gorm.DB) *GenerationHandler {
 	// Convert config to magda-agents config
@@ -133,7 +132,7 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
 }
 
 // generateOneShot handles non-streaming one-shot generation
-func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, userID uint, model string) {
+func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, _ uint, model string) {
 	startTime := time.Now()
 
 	// Use reasoning mode from request, default to "medium" for GPT-5
@@ -161,15 +160,15 @@ func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest,
 		return
 	}
 	duration := time.Since(startTime)
-	
+
 	// Extract token usage for logging/tracking (Sentry/metrics should be in API layer, not agents)
 	totalTokens := h.extractTotalTokens(result.Usage)
 	inputTokens := h.extractInputTokens(result.Usage)
 	outputTokens := h.extractOutputTokens(result.Usage)
 	reasoningTokens := h.extractReasoningTokens(result.Usage)
-	
+
 	// TODO: Log usage/metrics here (Sentry, database, etc.)
-	log.Printf("📊 Token usage - Total: %d, Input: %d, Output: %d, Reasoning: %d, Duration: %v", 
+	log.Printf("📊 Token usage - Total: %d, Input: %d, Output: %d, Reasoning: %d, Duration: %v",
 		totalTokens, inputTokens, outputTokens, reasoningTokens, duration)
 	// Deduct credits (may go negative up to -50)
 	// deductErr := h.creditsService.DeductCredits(userID, creditsCharged)
@@ -193,7 +192,6 @@ func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest,
 	// if err := h.creditsService.LogUsage(usageLog); err != nil {
 	// 	fmt.Printf("Failed to log usage: %v\n", err)
 	// }
-
 
 	// Add request ID to response
 	response := gin.H{
@@ -341,15 +339,15 @@ func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, 
 	}
 
 	duration := time.Since(startTime)
-	
+
 	// Extract token usage for logging/tracking (Sentry/metrics should be in API layer, not agents)
 	totalTokens := h.extractTotalTokens(result.Usage)
 	inputTokens := h.extractInputTokens(result.Usage)
 	outputTokens := h.extractOutputTokens(result.Usage)
 	reasoningTokens := h.extractReasoningTokens(result.Usage)
-	
+
 	// TODO: Log usage/metrics here (Sentry, database, etc.)
-	log.Printf("📊 Token usage (streaming) - Total: %d, Input: %d, Output: %d, Reasoning: %d, Duration: %v", 
+	log.Printf("📊 Token usage (streaming) - Total: %d, Input: %d, Output: %d, Reasoning: %d, Duration: %v",
 		totalTokens, inputTokens, outputTokens, reasoningTokens, duration)
 
 	// Send final result event with complete output_parsed data

@@ -8,12 +8,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/Conceptual-Machines/magda-api/internal/models"
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
+	"github.com/Conceptual-Machines/magda-api/internal/models"
 	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -48,10 +47,16 @@ const (
 	// Logging limits
 	maxArgsLogLength       = 100
 	maxLogEventCountOpenAI = 5
-	maxPreviewChars        = 200
-	maxErrorPreviewChars   = 500
-	maxErrorResponseChars  = 200
-	maxPathPreviewLen      = 10
+
+	// String truncation limits for logging
+	logTruncateShort      = 200   // Short truncation for field values
+	logTruncateLong       = 500   // Long truncation for full field values
+	logDumpLimit          = 5000  // Limit for dumping full structures
+	logDumpMaxLimit       = 10000 // Maximum limit for large dumps
+	maxPreviewChars       = 200
+	maxErrorPreviewChars  = 500
+	maxErrorResponseChars = 200
+	maxPathPreviewLen     = 10
 )
 
 // OpenAIProvider implements the Provider interface using OpenAI's Responses API
@@ -161,19 +166,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 			modifiedJSON, _ := json.Marshal(paramsMap)
 
-			// Save full request payload to file
-			log.Printf("🔍 DEBUG: request.CFGGrammar != nil = %v", request.CFGGrammar != nil)
-			if request.CFGGrammar != nil {
-				prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
-				requestFile := "/tmp/openai_request_full.json"
-				log.Printf("🔍 DEBUG: About to write request file: %s", requestFile)
-				if err := os.WriteFile(requestFile, prettyJSON, 0644); err != nil {
-					log.Printf("❌ FAILED to save request: %v", err)
-				} else {
-					log.Printf("💾 Saved FULL request payload to %s (%d bytes)", requestFile, len(prettyJSON))
-				}
-			}
-
 			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
 			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
@@ -187,16 +179,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 					}
 				}()
 				body, _ := io.ReadAll(httpResp.Body)
-
-				// Save full response payload to file
-				if request.CFGGrammar != nil && httpResp.StatusCode == http.StatusOK {
-					responseFile := "/tmp/openai_response_full.json"
-					if err := os.WriteFile(responseFile, body, 0644); err != nil {
-						log.Printf("❌ FAILED to save response: %v", err)
-					} else {
-						log.Printf("💾 Saved FULL response payload to %s (%d bytes)", responseFile, len(body))
-					}
-				}
 
 				if httpResp.StatusCode == http.StatusOK {
 					resp = &responses.Response{}
@@ -399,6 +381,25 @@ func getMapKeys(m map[string]any) []string {
 	return keys
 }
 
+// extractCFGCodeFromArray extracts CFG code or input from an array of tool/output maps
+func extractCFGCodeFromArray(items []any, arrayName string) string {
+	log.Printf("🔍 Found '%s' array with %d items", arrayName, len(items))
+	for j, item := range items {
+		if itemMap, ok := item.(map[string]any); ok {
+			log.Printf("🔍 %s[%d] keys: %v", arrayName, j, getMapKeys(itemMap))
+			if code, ok := itemMap["code"].(string); ok && code != "" {
+				log.Printf("🔧 Found CFG tool call code in %s[%d] (DSL): %s", arrayName, j, truncateString(code, maxPreviewChars))
+				return code
+			}
+			if input, ok := itemMap["input"].(string); ok && input != "" {
+				log.Printf("🔧 Found CFG tool call input in %s[%d] (DSL): %s", arrayName, j, truncateString(input, maxPreviewChars))
+				return input
+			}
+		}
+	}
+	return ""
+}
+
 // truncateString truncates a string to a maximum length
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -435,7 +436,8 @@ func (p *OpenAIProvider) validateCFGOutput(textOutput string) error {
 	if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
 		log.Printf("❌ CFG was configured but LLM generated JSON instead of using CFG tool")
 		log.Printf("❌ JSON output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. LLM must use the CFG tool to generate DSL code")
+		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. " +
+			"LLM must use the CFG tool to generate DSL code")
 	}
 
 	// Otherwise it's invalid
@@ -489,16 +491,13 @@ func (p *OpenAIProvider) processResponseWithCFG(
 							Usage:     resp.Usage,
 						}, nil
 					}
-					// Try interface{} that might contain string
-					if codeStr, ok := codeVal.(interface{}); ok {
-						log.Printf("🔍 code is interface{}, trying to convert")
-						if str, ok := codeStr.(string); ok && str != "" {
-							log.Printf("🔧 Found CFG code after interface conversion: %s", truncateString(str, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: str,
-								Usage:     resp.Usage,
-							}, nil
-						}
+					// Try converting to string directly
+					if str, ok := codeVal.(string); ok && str != "" {
+						log.Printf("🔧 Found CFG code (direct string): %s", truncateString(str, maxPreviewChars))
+						return &GenerationResponse{
+							RawOutput: str,
+							Usage:     resp.Usage,
+						}, nil
 					}
 					// Log what we actually got
 					log.Printf("🔍 code value (raw): %+v", codeVal)
@@ -513,7 +512,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 ========== CHECKING ALL STRING FIELDS IN OUTPUT ITEM FOR DSL CONTENT ==========")
 					for key, val := range outputItemMap {
 						if strVal, ok := val.(string); ok && strVal != "" {
-							log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, 500))
+							log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, logTruncateLong))
 							if p.isDSLCode(strVal) {
 								log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", key, truncateString(strVal, maxPreviewChars))
 								return &GenerationResponse{
@@ -527,8 +526,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 ========== CHECKING NON-STRING FIELDS (arguments, tools, outputs) ==========")
 					fullDump, _ := json.MarshalIndent(outputItemMap, "", "  ")
 					dumpLen := len(fullDump)
-					if dumpLen > 10000 {
-						dumpLen = 10000
+					if dumpLen > logDumpMaxLimit {
+						dumpLen = logDumpMaxLimit
 					}
 					log.Printf("🔍 FULL OUTPUT ITEM STRUCTURE (first %d chars):\n%s", dumpLen, string(fullDump[:dumpLen]))
 				}
@@ -561,7 +560,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					log.Printf("🔍 'arguments' field EXISTS: type=%T", argsVal)
 					// Log the full value for debugging
 					argsJSON, _ := json.Marshal(argsVal)
-					log.Printf("🔍 'arguments' field value (JSON): %s", truncateString(string(argsJSON), 500))
+					log.Printf("🔍 'arguments' field value (JSON): %s", truncateString(string(argsJSON), logTruncateLong))
 					if argsStr, ok := argsVal.(string); ok && argsStr != "" {
 						log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(argsStr, maxPreviewChars))
 						return &GenerationResponse{
@@ -575,7 +574,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 						// Check common fields in arguments map
 						for key, val := range argsMap {
 							if strVal, ok := val.(string); ok && strVal != "" && len(strVal) > 10 {
-								log.Printf("🔍 'arguments[%s]' = %s", key, truncateString(strVal, 200))
+								log.Printf("🔍 'arguments[%s]' = %s", key, truncateString(strVal, logTruncateShort))
 								if p.isDSLCode(strVal) {
 									log.Printf("🔧 Found DSL in arguments[%s]: %s", key, truncateString(strVal, maxPreviewChars))
 									return &GenerationResponse{
@@ -594,7 +593,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if resultVal, exists := outputItemMap["result"]; exists {
 					log.Printf("🔍 'result' field EXISTS: type=%T", resultVal)
 					if resultStr, ok := resultVal.(string); ok && resultStr != "" {
-						log.Printf("🔍 'result' field value (first 200 chars): %s", truncateString(resultStr, 200))
+						log.Printf("🔍 'result' field value (first 200 chars): %s", truncateString(resultStr, logTruncateShort))
 						if p.isDSLCode(resultStr) {
 							log.Printf("🔧 Found CFG tool call result (DSL): %s", truncateString(resultStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -609,7 +608,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if outputVal, exists := outputItemMap["output"]; exists {
 					log.Printf("🔍 'output' field EXISTS: type=%T", outputVal)
 					if outputStr, ok := outputVal.(string); ok && outputStr != "" {
-						log.Printf("🔍 'output' field value (first 200 chars): %s", truncateString(outputStr, 200))
+						log.Printf("🔍 'output' field value (first 200 chars): %s", truncateString(outputStr, logTruncateShort))
 						if p.isDSLCode(outputStr) {
 							log.Printf("🔧 Found CFG tool call output (DSL): %s", truncateString(outputStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -624,7 +623,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				if contentVal, exists := outputItemMap["content"]; exists {
 					log.Printf("🔍 'content' field EXISTS: type=%T", contentVal)
 					if contentStr, ok := contentVal.(string); ok && contentStr != "" {
-						log.Printf("🔍 'content' field value (first 200 chars): %s", truncateString(contentStr, 200))
+						log.Printf("🔍 'content' field value (first 200 chars): %s", truncateString(contentStr, logTruncateShort))
 						if p.isDSLCode(contentStr) {
 							log.Printf("🔧 Found CFG tool call content (DSL): %s", truncateString(contentStr, maxPreviewChars))
 							return &GenerationResponse{
@@ -636,48 +635,14 @@ func (p *OpenAIProvider) processResponseWithCFG(
 				}
 				// Check "tools" array
 				if tools, ok := outputItemMap["tools"].([]any); ok && len(tools) > 0 {
-					log.Printf("🔍 Found 'tools' array with %d items", len(tools))
-					for j, tool := range tools {
-						if toolMap, ok := tool.(map[string]any); ok {
-							log.Printf("🔍 Tool %d keys: %v", j, getMapKeys(toolMap))
-							if code, ok := toolMap["code"].(string); ok && code != "" {
-								log.Printf("🔧 Found CFG tool call code in tools[%d] (DSL): %s", j, truncateString(code, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: code,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							if input, ok := toolMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in tools[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-						}
+					if code := extractCFGCodeFromArray(tools, "tools"); code != "" {
+						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
 					}
 				}
 				// Check "outputs" array
 				if outputs, ok := outputItemMap["outputs"].([]any); ok && len(outputs) > 0 {
-					log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
-					for j, output := range outputs {
-						if outputMap, ok := output.(map[string]any); ok {
-							log.Printf("🔍 Output %d keys: %v", j, getMapKeys(outputMap))
-							if code, ok := outputMap["code"].(string); ok && code != "" {
-								log.Printf("🔧 Found CFG tool call code in outputs[%d] (DSL): %s", j, truncateString(code, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: code,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							if input, ok := outputMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in outputs[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-						}
+					if code := extractCFGCodeFromArray(outputs, "outputs"); code != "" {
+						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
 					}
 				}
 				// Direct "input" field (tool call input)
@@ -735,8 +700,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 			for i, outputItem := range resp.Output {
 				outputItemJSON, _ := json.MarshalIndent(outputItem, "", "  ")
 				dumpLen := len(outputItemJSON)
-				if dumpLen > 5000 {
-					dumpLen = 5000
+				if dumpLen > logDumpLimit {
+					dumpLen = logDumpLimit
 				}
 				log.Printf("🔍 Output item %d (first %d chars):\n%s", i, dumpLen, string(outputItemJSON[:dumpLen]))
 			}
@@ -763,7 +728,7 @@ func (p *OpenAIProvider) processResponseWithCFG(
 						// Check for any string field that might contain DSL
 						for key, val := range outputItemMap {
 							if strVal, ok := val.(string); ok && len(strVal) > 10 {
-								log.Printf("🔍 Found string field '%s' with %d chars: %s", key, len(strVal), truncateString(strVal, 200))
+								log.Printf("🔍 Found string field '%s' with %d chars: %s", key, len(strVal), truncateString(strVal, logTruncateShort))
 								// If it looks like DSL code (contains track(), newClip(), etc.), use it
 								if strings.Contains(strVal, "track(") || strings.Contains(strVal, "delete_track") || strings.Contains(strVal, "create_track") {
 									log.Printf("🔧 Found DSL-like content in field '%s', using as output", key)
@@ -777,7 +742,8 @@ func (p *OpenAIProvider) processResponseWithCFG(
 					}
 				}
 			}
-			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. LLM must use the CFG tool to generate DSL code")
+			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. " +
+				"LLM must use the CFG tool to generate DSL code")
 		}
 		return nil, fmt.Errorf("openai response did not include any output text")
 	}

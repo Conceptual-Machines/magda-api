@@ -30,7 +30,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 	router.Static("/static", "./static")
 
 	// Health check
-	router.GET("/health", handlers.HealthCheck)
+	healthHandler := handlers.NewHealthHandler(db)
+	router.GET("/health", healthHandler.HealthCheck)
 
 	// MCP status endpoint
 	router.GET("/mcp/status", handlers.MCPStatus)
@@ -96,13 +97,17 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 
 		// MAGDA endpoints - DAW control using magda-agents
 		magdaHandler := handlers.NewMagdaHandler(cfg, db)
-		v1.POST("/magda/chat", magdaHandler.Chat)
-		v1.POST("/magda/chat/stream", magdaHandler.ChatStream) // Experimental streaming endpoint
-		v1.POST("/magda/dsl/stream", magdaHandler.DSLStream)   // DSL streaming endpoint (explicit DSL mode)
-		v1.POST("/magda/dsl", magdaHandler.TestDSL)            // DSL parser endpoint
+		v1.POST("/chat", magdaHandler.Chat)
+		v1.POST("/chat/stream", magdaHandler.ChatStream) // Experimental streaming endpoint
+		v1.POST("/dsl/stream", magdaHandler.DSLStream)   // DSL streaming endpoint (explicit DSL mode)
+		v1.POST("/dsl", magdaHandler.TestDSL)            // DSL parser endpoint
 
 		// MAGDA Plugin endpoints
-		v1.POST("/magda/plugins/process", magdaHandler.ProcessPlugins) // Deduplicate plugins and generate aliases
+		v1.POST("/plugins/process", magdaHandler.ProcessPlugins) // Deduplicate plugins and generate aliases
+
+		// Drummer agent endpoint
+		drummerHandler := handlers.NewDrummerHandler(cfg, db)
+		v1.POST("/drummer/generate", drummerHandler.Generate)
 
 		// User/dashboard endpoints
 		userHandler := handlers.NewUserHandler(db)

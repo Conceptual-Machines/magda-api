@@ -116,7 +116,6 @@ func TestMagdaCFGModeRejectsJSON(t *testing.T) {
 			t.Errorf("❌ FAILED: JSON fallback logic is still active! Got set_track_mute instead of delete_track")
 			t.Errorf("Response: %s", responseStr)
 		}
-
 	} else {
 		// If it failed, verify the error message indicates CFG/DSL requirement
 		assert.Contains(t, responseStr, "DSL", "Error should mention DSL requirement")
@@ -312,8 +311,7 @@ func TestMagdaDeleteTrackGeneratesDSL(t *testing.T) {
 					t.Logf("Warning: No delete_track action found. Actions: %v", actions)
 				}
 			} else {
-				responseStr := string(w.Body.Bytes())
-				t.Errorf("❌ TEST FAILED: LLM did not use CFG tool. This is REQUIRED. Response: %s", responseStr)
+				t.Errorf("❌ TEST FAILED: LLM did not use CFG tool. This is REQUIRED. Response: %s", w.Body.String())
 				t.FailNow()
 			}
 		})

@@ -125,16 +125,17 @@ func (t *Trace) Generation(name string, metadata map[string]interface{}) *Genera
 	}
 }
 
-// Finish completes the trace and flushes data to Langfuse
+// Finish completes the trace
+// Note: We don't call Flush() here - the SDK batches events and sends them automatically.
+// Calling Flush() on every request causes "send on closed channel" panic because
+// the global client's internal channels get closed. Flush should only be called on shutdown.
 func (t *Trace) Finish() {
-	if t.enabled && t.client != nil {
-		// Flush ensures all batched events are sent
-		// The SDK batches events and sends them asynchronously
-		// Flush() waits for all queued events to be sent
-		log.Printf("🔍 Langfuse: Flushing trace %s...", t.trace.ID)
-		t.client.Flush(t.ctx)
-		log.Printf("🔍 Langfuse: Flush completed for trace %s (check dashboard in a few seconds)", t.trace.ID)
+	if !t.enabled {
+		return
 	}
+	// The trace is already sent/queued when created and updated.
+	// The SDK will batch and send events periodically.
+	log.Printf("🔍 Langfuse: Trace %s completed (will be sent in batch)", t.trace.ID)
 }
 
 // SetMetadata adds metadata to the trace
@@ -238,10 +239,7 @@ func (g *Generation) LogOpenAIResponseStruct(
 		InputCost:  0, // Will be calculated if needed
 		OutputCost: 0, // Will be calculated if needed
 	}
-	if resp.Usage.OutputTokensDetails.ReasoningTokens > 0 {
-		// Note: SDK may not support reasoning tokens directly
-	}
-
+	// Note: SDK may not support reasoning tokens directly yet
 	// Calculate cost
 	cost := CalculateOpenAICost(modelName, resp.Usage)
 

@@ -24,7 +24,8 @@ track_param: "instrument" "=" STRING
            | "selected" "=" BOOLEAN  // track(selected=true) references currently selected track
 
 // ---------- Method chaining ----------
-chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain | delete_chain | delete_clip_chain
+chain: clip_chain | midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain |
+       delete_chain | delete_clip_chain
 
 // ---------- Clip operations ----------
 clip_chain: ".newClip" "(" clip_params? ")" (midi_chain | fx_chain | volume_chain | pan_chain | mute_chain | solo_chain | name_chain)?

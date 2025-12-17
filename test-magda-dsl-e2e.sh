@@ -140,6 +140,5 @@ else
     echo "  Total duration: $(printf "%.3f" $TOTAL_DURATION)s"
     echo "  No actions received"
 fi
-
 echo ""
 echo "✅ E2E test complete"

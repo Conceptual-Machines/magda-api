@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/api"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/Conceptual-Machines/magda-api/internal/database"
+	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -40,7 +42,7 @@ func main() {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              cfg.SentryDSN,
 			Environment:      cfg.Environment,
-			Release:          "magda-api@" + releaseVersion,           // Use embedded release version
+			Release:          "magda-api@" + releaseVersion,            // Use embedded release version
 			EnableTracing:    true,                                     // Enable tracing for spans
 			TracesSampleRate: 1.0,                                      // 100% sampling for now, adjust based on volume
 			EnableLogs:       true,                                     // Enable Sentry Logs feature
@@ -62,6 +64,17 @@ func main() {
 	} else {
 		log.Println("⚠️  Sentry not configured (SENTRY_DSN not set)")
 	}
+
+	// Initialize Langfuse for LLM observability
+	// Set environment variables for the SDK (it reads from env vars)
+	if cfg.LangfuseEnabled && cfg.LangfuseSecretKey != "" {
+		os.Setenv("LANGFUSE_PUBLIC_KEY", cfg.LangfusePublicKey)
+		os.Setenv("LANGFUSE_SECRET_KEY", cfg.LangfuseSecretKey)
+		if cfg.LangfuseHost != "" {
+			os.Setenv("LANGFUSE_HOST", cfg.LangfuseHost)
+		}
+	}
+	observability.InitializeLangfuse(context.Background(), cfg)
 
 	// Initialize database
 	db, err := database.Connect(cfg.DatabaseURL)

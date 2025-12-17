@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/Conceptual-Machines/magda-api/internal/config"
-	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	magdaorchestrator "github.com/Conceptual-Machines/magda-agents-go/agents/coordination"
 	magdadaw "github.com/Conceptual-Machines/magda-agents-go/agents/daw"
 	magdaplugin "github.com/Conceptual-Machines/magda-agents-go/agents/plugin"
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
+	"github.com/Conceptual-Machines/magda-api/internal/config"
+	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -103,16 +104,49 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 		log.Printf("   User ID: %d", userID)
 	}
 
+	// Start Langfuse trace for observability
+	lfClient := observability.GetClient()
+	log.Printf("🔍 Langfuse: Client enabled: %v", lfClient.IsEnabled())
+	trace := lfClient.StartTrace(c.Request.Context(), "magda-chat", map[string]interface{}{
+		"question": req.Question,
+		"user_id":  userID,
+	})
+	log.Printf("🔍 Langfuse: Trace created, will finish on defer")
+	defer func() {
+		log.Printf("🔍 Langfuse: Finishing trace...")
+		trace.Finish()
+		log.Printf("🔍 Langfuse: Trace finished")
+	}()
+
 	// Generate actions from question and state using orchestrator
 	log.Printf("🚀 MAGDA Chat: Calling Orchestrator.GenerateActions")
+	gen := trace.Generation("orchestrator", map[string]interface{}{
+		"question": req.Question,
+	})
+	log.Printf("🔍 Langfuse: Generation span created")
+	gen.Input(req.Question)
+
 	result, err := h.orchestrator.GenerateActions(c.Request.Context(), req.Question, req.State)
 	if err != nil {
 		log.Printf("❌ MAGDA Chat: GenerateActions error: %v", err)
 		log.Printf("   Error type: %T", err)
 		log.Printf("   Stack trace:\n%s", string(debug.Stack()))
+		gen.SetLevel("ERROR")
+		gen.Output(err.Error())
+		gen.Finish()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Log result to Langfuse
+	log.Printf("🔍 Langfuse: Setting generation output (%d actions)", len(result.Actions))
+	gen.Output(result.Actions)
+	gen.Metadata(map[string]interface{}{
+		"actions_count": len(result.Actions),
+	})
+	log.Printf("🔍 Langfuse: Finishing generation span...")
+	gen.Finish()
+	log.Printf("🔍 Langfuse: Generation span finished")
 
 	// Log result
 	log.Printf("✅ MAGDA Chat: GenerateActions succeeded")

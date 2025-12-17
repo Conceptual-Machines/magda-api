@@ -40,7 +40,13 @@ repos:
       - id: go-fmt
       - id: go-vet
       # - id: go-imports  # Disabled - not in PATH
-      # - id: golangci-lint  # Disabled - not in PATH
+
+  # golangci-lint (matches CI version)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.8
+    hooks:
+      - id: golangci-lint
+        args: [--config=golangci.yml]
 
   # Dockerfile linting
   - repo: https://github.com/hadolint/hadolint
