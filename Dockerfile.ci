@@ -24,8 +24,8 @@ FROM base AS test
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Remove integration tests (they require API keys)
-RUN find . -name '*_integration_test.go' -delete
+# Remove handler tests (they require API keys)
+RUN rm -rf internal/api/handlers/*_test.go
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test-output.log && \
     go tool cover -html=coverage.out -o coverage.html && \
