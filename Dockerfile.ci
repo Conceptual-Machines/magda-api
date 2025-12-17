@@ -24,10 +24,9 @@ FROM base AS test
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Remove handler tests (they require API keys)
-RUN rm -rf internal/api/handlers/*_test.go
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
-RUN go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test-output.log && \
+# hadolint ignore=SC2046
+RUN go test -v -race -coverprofile=coverage.out $(go list ./... | grep -v /handlers) 2>&1 | tee test-output.log && \
     go tool cover -html=coverage.out -o coverage.html && \
     go tool cover -func=coverage.out > coverage-summary.txt
 
