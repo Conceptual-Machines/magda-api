@@ -125,23 +125,17 @@ func (t *Trace) Generation(name string, metadata map[string]interface{}) *Genera
 	}
 }
 
-// Finish completes the trace and flushes data to Langfuse
+// Finish completes the trace
+// Note: We don't call Flush() here - the SDK batches events and sends them automatically.
+// Calling Flush() on every request causes "send on closed channel" panic because
+// the global client's internal channels get closed. Flush should only be called on shutdown.
 func (t *Trace) Finish() {
 	if !t.enabled {
-		log.Printf("🔍 Langfuse: Trace not enabled, skipping finish")
 		return
 	}
-	if t.client == nil {
-		log.Printf("🔍 Langfuse: Client is nil, skipping finish")
-		return
-	}
-	// Flush ensures all batched events are sent
-	// The SDK batches events and sends them asynchronously
-	// Flush() waits for all queued events to be sent
-	// Use background context for flush to avoid cancellation issues
-	log.Printf("🔍 Langfuse: Flushing trace %s...", t.trace.ID)
-	t.client.Flush(context.Background())
-	log.Printf("🔍 Langfuse: Flush completed for trace %s (check dashboard in a few seconds)", t.trace.ID)
+	// The trace is already sent/queued when created and updated.
+	// The SDK will batch and send events periodically.
+	log.Printf("🔍 Langfuse: Trace %s completed (will be sent in batch)", t.trace.ID)
 }
 
 // SetMetadata adds metadata to the trace
