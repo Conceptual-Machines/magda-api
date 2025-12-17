@@ -24,10 +24,10 @@ FROM base AS test
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Run tests with coverage and save output
-# Use -short flag to skip integration tests (which require real API keys and are flaky)
+# Remove integration tests (they require API keys)
+RUN find . -name '*_integration_test.go' -delete
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
-RUN go test -v -short -race -coverprofile=coverage.out ./... 2>&1 | tee test-output.log && \
+RUN go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test-output.log && \
     go tool cover -html=coverage.out -o coverage.html && \
     go tool cover -func=coverage.out > coverage-summary.txt
 
