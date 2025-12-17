@@ -79,7 +79,7 @@ func TestDrummerHandler_Integration(t *testing.T) {
 				// Validate first action
 				action, ok := actions[0].(map[string]any)
 				require.True(t, ok, "Action should be a map")
-				assert.Equal(t, "drum_pattern", action["type"], "Action type should be drum_pattern")
+				assert.Equal(t, "drum_pattern", action["action"], "Action should be drum_pattern")
 				assert.Equal(t, "kick", action["drum"], "Drum should be kick")
 
 				// Check grid pattern
