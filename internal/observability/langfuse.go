@@ -138,8 +138,9 @@ func (t *Trace) Finish() {
 	// Flush ensures all batched events are sent
 	// The SDK batches events and sends them asynchronously
 	// Flush() waits for all queued events to be sent
+	// Use background context for flush to avoid cancellation issues
 	log.Printf("🔍 Langfuse: Flushing trace %s...", t.trace.ID)
-	t.client.Flush(t.ctx)
+	t.client.Flush(context.Background())
 	log.Printf("🔍 Langfuse: Flush completed for trace %s (check dashboard in a few seconds)", t.trace.ID)
 }
 
