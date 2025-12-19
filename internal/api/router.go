@@ -105,6 +105,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 		// MAGDA Plugin endpoints
 		v1.POST("/plugins/process", magdaHandler.ProcessPlugins) // Deduplicate plugins and generate aliases
 
+		// MAGDA Mix Analysis endpoint
+		mixHandler := handlers.NewMixHandler(cfg, db)
+		v1.POST("/mix/analyze", mixHandler.MixAnalyze) // Mix analysis endpoint
+
 		// Drummer agent endpoint
 		drummerHandler := handlers.NewDrummerHandler(cfg, db)
 		v1.POST("/drummer/generate", drummerHandler.Generate)
