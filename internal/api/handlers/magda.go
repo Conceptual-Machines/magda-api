@@ -11,6 +11,7 @@ import (
 
 	magdaorchestrator "github.com/Conceptual-Machines/magda-agents-go/agents/coordination"
 	magdadaw "github.com/Conceptual-Machines/magda-agents-go/agents/daw"
+	magdamix "github.com/Conceptual-Machines/magda-agents-go/agents/mix"
 	magdaplugin "github.com/Conceptual-Machines/magda-agents-go/agents/plugin"
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
@@ -28,6 +29,7 @@ const (
 type MagdaHandler struct {
 	orchestrator  *magdaorchestrator.Orchestrator
 	pluginService *magdaplugin.PluginAgent
+	mixAgent      *magdamix.MixAnalysisAgent
 	db            *gorm.DB
 	cfg           *config.Config
 }
@@ -48,6 +50,7 @@ func NewMagdaHandler(cfg *config.Config, db *gorm.DB) *MagdaHandler {
 	return &MagdaHandler{
 		orchestrator:  magdaorchestrator.NewOrchestrator(magdaCfg),
 		pluginService: magdaplugin.NewPluginAgent(magdaCfg),
+		mixAgent:      magdamix.NewMixAnalysisAgent(magdaCfg),
 		db:            db,
 		cfg:           cfg,
 	}
@@ -481,4 +484,88 @@ func buildResponseText(actions []map[string]any) string {
 	}
 
 	return sb.String()
+}
+
+// MixAnalyze handles mix analysis requests with DSP data
+func (h *MagdaHandler) MixAnalyze(c *gin.Context) {
+	var req magdamix.AnalysisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("❌ MixAnalyze: JSON binding error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("📨 MixAnalyze: Received request")
+	log.Printf("   Mode: %s", req.Mode)
+	log.Printf("   User request: %s", req.UserRequest)
+	if req.Context != nil {
+		log.Printf("   Track: %s (%s)", req.Context.TrackName, req.Context.TrackType)
+	}
+
+	// Get user from context
+	userID, _ := middleware.GetCurrentUserID(c)
+	if userID > 0 {
+		log.Printf("   User ID: %d", userID)
+	}
+
+	// Start Langfuse trace
+	lfClient := observability.GetClient()
+	trace := lfClient.StartTrace(c.Request.Context(), "mix-analyze", map[string]interface{}{
+		"mode":         req.Mode,
+		"user_request": req.UserRequest,
+		"user_id":      userID,
+	})
+	defer trace.Finish()
+
+	// Call mix analysis agent
+	log.Printf("🚀 MixAnalyze: Calling MixAnalysisAgent.Analyze")
+	result, err := h.mixAgent.Analyze(c.Request.Context(), &req)
+	if err != nil {
+		log.Printf("❌ MixAnalyze: Analysis error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Build human-readable response text
+	var responseText string
+	if result.Analysis != nil {
+		responseText = result.Analysis.Summary
+		if len(result.Analysis.Issues) > 0 {
+			responseText += "\n\nIssues detected:\n"
+			for _, issue := range result.Analysis.Issues {
+				responseText += fmt.Sprintf("• [%s] %s: %s\n", issue.Severity, issue.Type, issue.Description)
+			}
+		}
+		if len(result.Analysis.Strengths) > 0 {
+			responseText += "\nStrengths:\n"
+			for _, strength := range result.Analysis.Strengths {
+				responseText += fmt.Sprintf("• %s\n", strength)
+			}
+		}
+	}
+
+	// Add recommendations summary
+	if len(result.Recommendations) > 0 {
+		responseText += "\n\nRecommendations:\n"
+		for i, rec := range result.Recommendations {
+			responseText += fmt.Sprintf("%d. [%s] %s\n", i+1, rec.Priority, rec.Description)
+			if rec.Explanation != "" {
+				responseText += fmt.Sprintf("   → %s\n", rec.Explanation)
+			}
+		}
+	}
+
+	log.Printf("✅ MixAnalyze: Analysis complete")
+	log.Printf("   Summary length: %d chars", len(responseText))
+	log.Printf("   Recommendations: %d", len(result.Recommendations))
+
+	// Build response
+	response := gin.H{
+		"request_id":      c.GetString("request_id"),
+		"response":        responseText,
+		"analysis":        result.Analysis,
+		"recommendations": result.Recommendations,
+	}
+
+	c.JSON(http.StatusOK, response)
 }

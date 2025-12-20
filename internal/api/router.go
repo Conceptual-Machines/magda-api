@@ -109,6 +109,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 		mixHandler := handlers.NewMixHandler(cfg, db)
 		v1.POST("/mix/analyze", mixHandler.MixAnalyze) // Mix analysis endpoint
 
+		// JSFX agent endpoint
+		jsfxHandler := handlers.NewJSFXHandler(cfg)
+		v1.POST("/jsfx/generate", jsfxHandler.Assist) // JSFX generation endpoint
+
 		// Drummer agent endpoint
 		drummerHandler := handlers.NewDrummerHandler(cfg, db)
 		v1.POST("/drummer/generate", drummerHandler.Generate)
