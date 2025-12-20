@@ -163,9 +163,13 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 		log.Printf("   Usage: %+v", result.Usage)
 	}
 
+	// Build human-readable response text from actions
+	responseText := buildResponseText(result.Actions)
+
 	// Build response
 	response := gin.H{
 		"request_id": c.GetString("request_id"),
+		"response":   responseText,
 		"actions":    result.Actions,
 		"usage":      result.Usage,
 	}
@@ -437,4 +441,44 @@ func (h *MagdaHandler) ProcessPlugins(c *gin.Context) {
 		"plugins_count": len(req.Plugins),
 		"aliases_count": len(aliases),
 	})
+}
+
+// buildResponseText creates a human-readable summary from actions
+func buildResponseText(actions []map[string]any) string {
+	if len(actions) == 0 {
+		return "No actions generated."
+	}
+
+	var sb bytes.Buffer
+	sb.WriteString("Mix Analysis Recommendations:\n\n")
+
+	for i, action := range actions {
+		// Get description
+		desc, _ := action["description"].(string)
+		if desc == "" {
+			// Try action type as fallback
+			if actionType, ok := action["action"].(string); ok {
+				desc = actionType
+			}
+		}
+
+		// Get explanation
+		explanation, _ := action["explanation"].(string)
+
+		// Get priority
+		priority, _ := action["priority"].(string)
+		priorityStr := ""
+		if priority != "" {
+			priorityStr = fmt.Sprintf(" [%s]", priority)
+		}
+
+		// Write numbered item
+		sb.WriteString(fmt.Sprintf("%d.%s %s\n", i+1, priorityStr, desc))
+		if explanation != "" {
+			sb.WriteString(fmt.Sprintf("   → %s\n", explanation))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
