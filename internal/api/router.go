@@ -112,6 +112,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, version string) *gin.Engine {
 		// JSFX agent endpoint - AI-assisted JSFX effect generation
 		jsfxHandler := handlers.NewJSFXHandler(cfg, db)
 		v1.POST("/jsfx/generate", jsfxHandler.Generate)
+		v1.POST("/jsfx/generate/stream", jsfxHandler.GenerateStream)
 
 		// Drummer agent endpoint
 		drummerHandler := handlers.NewDrummerHandler(cfg, db)
