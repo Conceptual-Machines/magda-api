@@ -22,6 +22,12 @@ const (
 	logResponseMaxLen = 500
 )
 
+// Response messages
+const (
+	msgJSFXSuccess      = "JSFX generated successfully"
+	msgJSFXCompileError = "JSFX generated but has compile errors. Please review and fix."
+)
+
 // JSFXHandler handles JSFX generation requests
 type JSFXHandler struct {
 	agent *jsfx.JSFXAgent
@@ -138,10 +144,10 @@ func (h *JSFXHandler) Generate(c *gin.Context) {
 
 	// Set appropriate message based on result
 	if result.CompileError != "" {
-		response.Message = "JSFX generated but has compile errors. Please review and fix."
+		response.Message = msgJSFXCompileError
 		log.Printf("⚠️ JSFX Generate: Compile error: %s", result.CompileError)
 	} else {
-		response.Message = "JSFX generated successfully"
+		response.Message = msgJSFXSuccess
 		log.Printf("✅ JSFX Generate: Success")
 	}
 
@@ -306,9 +312,9 @@ func (h *JSFXHandler) GenerateStream(c *gin.Context) {
 	}
 
 	// Prepare response message
-	message := "JSFX generated successfully"
+	message := msgJSFXSuccess
 	if result.CompileError != "" {
-		message = "JSFX generated but has compile errors. Please review and fix."
+		message = msgJSFXCompileError
 	}
 
 	// Send final done event with complete code and description
