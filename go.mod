@@ -104,7 +104,5 @@ require (
 
 replace github.com/openai/openai-go => github.com/openai/openai-go v1.12.0
 
-// For local development, uncomment to use local path:
-// replace github.com/Conceptual-Machines/magda-agents-go => ../magda-agents-go
-
-// replace github.com/Conceptual-Machines/magda-agents-go => ../magda-agents-go
+// For local development:
+replace github.com/Conceptual-Machines/magda-agents-go => ../magda-agents-go

@@ -50,10 +50,9 @@ type JSFXGenerateRequest struct {
 
 // JSFXGenerateResponse is the response for JSFX generation
 type JSFXGenerateResponse struct {
-	DSL        string `json:"dsl"`                   // Raw DSL from LLM
-	JSFXCode   string `json:"jsfx_code"`             // Generated JSFX code
-	ParseError string `json:"parse_error,omitempty"` // Parser error for human-in-the-loop
-	Message    string `json:"message"`               // Message to user
+	JSFXCode     string `json:"jsfx_code"`               // Generated JSFX code (direct from LLM)
+	CompileError string `json:"compile_error,omitempty"` // EEL2 compile error if validation enabled
+	Message      string `json:"message"`                 // Message to user
 }
 
 // Generate handles JSFX generation requests
@@ -132,15 +131,14 @@ func (h *JSFXHandler) Generate(c *gin.Context) {
 
 	// Build response
 	response := JSFXGenerateResponse{
-		DSL:        result.DSL,
-		JSFXCode:   result.JSFXCode,
-		ParseError: result.ParseError,
+		JSFXCode:     result.JSFXCode,
+		CompileError: result.CompileError,
 	}
 
 	// Set appropriate message based on result
-	if result.ParseError != "" {
-		response.Message = "DSL generated but parsing failed. Please review and provide feedback."
-		log.Printf("⚠️ JSFX Generate: Partial success (parse error)")
+	if result.CompileError != "" {
+		response.Message = "JSFX generated but has compile errors. Please review and fix."
+		log.Printf("⚠️ JSFX Generate: Compile error: %s", result.CompileError)
 	} else {
 		response.Message = "JSFX generated successfully"
 		log.Printf("✅ JSFX Generate: Success")
@@ -148,10 +146,9 @@ func (h *JSFXHandler) Generate(c *gin.Context) {
 
 	// Log response
 	responseJSON, _ := json.Marshal(response)
-	log.Printf("   DSL length: %d bytes", len(result.DSL))
 	log.Printf("   JSFX length: %d bytes", len(result.JSFXCode))
-	if result.ParseError != "" {
-		log.Printf("   Parse error: %s", result.ParseError)
+	if result.CompileError != "" {
+		log.Printf("   Compile error: %s", result.CompileError)
 	}
 	log.Printf("   Response preview: %s", truncateStr(string(responseJSON), logResponseMaxLen))
 
