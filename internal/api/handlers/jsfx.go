@@ -155,7 +155,8 @@ func (h *JSFXHandler) Generate(c *gin.Context) {
 	}
 	log.Printf("   Response preview: %s", truncateStr(string(responseJSON), logResponseMaxLen))
 
-	c.JSON(http.StatusOK, response)
+	// Use PureJSON to avoid HTML-escaping < and > in JSFX code
+	c.PureJSON(http.StatusOK, response)
 }
 
 // truncateStr truncates a string to maxLen characters
