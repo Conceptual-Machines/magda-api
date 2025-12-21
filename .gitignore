@@ -59,5 +59,6 @@ infra/terraform/terraform.tfvars
 ssl/
 .envrc
 aideas-api
+magda-api
 eval_results_*.json
 .env.bak
