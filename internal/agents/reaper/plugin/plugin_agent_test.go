@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

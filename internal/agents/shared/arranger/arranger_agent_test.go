@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
 	"github.com/Conceptual-Machines/magda-api/internal/llm"
 )
 

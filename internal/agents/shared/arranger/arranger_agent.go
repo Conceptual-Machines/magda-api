@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
 	"github.com/Conceptual-Machines/magda-api/internal/llm"
 	"github.com/Conceptual-Machines/magda-api/internal/metrics"
 	"github.com/Conceptual-Machines/magda-api/internal/models"

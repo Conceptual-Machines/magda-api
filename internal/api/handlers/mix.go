@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
-	mixagent "github.com/Conceptual-Machines/magda-api/internal/agents/mix"
+	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
+	mixagent "github.com/Conceptual-Machines/magda-api/internal/agents/shared/mix"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
 )

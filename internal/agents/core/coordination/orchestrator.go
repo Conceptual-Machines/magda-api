@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	arranger "github.com/Conceptual-Machines/magda-api/internal/agents/arranger"
-	"github.com/Conceptual-Machines/magda-api/internal/agents/config"
-	"github.com/Conceptual-Machines/magda-api/internal/agents/daw"
-	"github.com/Conceptual-Machines/magda-api/internal/agents/drummer"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/reaper/daw"
+	arranger "github.com/Conceptual-Machines/magda-api/internal/agents/shared/arranger"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/shared/drummer"
 	"github.com/Conceptual-Machines/magda-api/internal/llm"
 	"github.com/Conceptual-Machines/magda-api/internal/models"
 )

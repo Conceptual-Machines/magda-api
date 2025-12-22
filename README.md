@@ -1,6 +1,10 @@
 # MAGDA API
 
-Stateless Go API for MAGDA (Musical AI Digital Assistant) - AI-powered music production assistant for REAPER.
+[![CI](https://github.com/Conceptual-Machines/magda-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Conceptual-Machines/magda-api/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Conceptual-Machines/magda-api)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Stateless Go API for **MAGDA** (**M**ulti-**A**gent **G**enerative **D**AW **A**utomation) - AI-powered music production assistant for REAPER.
 
 ## Overview
 
@@ -22,8 +26,35 @@ This is a **stateless API** with no database. Authentication and user management
 |-----------|------|
 | Language | Go 1.24+ |
 | Framework | Gin |
-| LLM | OpenAI GPT-5 |
+| LLM | OpenAI GPT-4.1/5 |
 | Observability | Sentry, Langfuse |
+
+### Agent Architecture
+
+Agents are organized by DAW to support multiple DAWs in the future:
+
+```
+agents/
+├── core/           # Orchestration (DAW-agnostic)
+├── reaper/         # REAPER-specific (daw, jsfx, plugin)
+├── shared/         # Works on any DAW (drummer, arranger, mix)
+└── ableton/        # (Future) Ableton Live support
+```
+
+### CFG-Constrained DSL Generation
+
+Most agents use **Context-Free Grammar (CFG)** with GPT-5 to constrain the LLM to generate valid DSL code. We use the [grammar-school-go](https://github.com/Conceptual-Machines/grammar-school-go) library to build CFG tool payloads.
+
+| Agent | DSL | Example |
+|-------|-----|---------|
+| DAW | MAGDA DSL | `track(instrument="Serum").new_clip(bar=1, length_bars=4)` |
+| Arranger | Arranger DSL | `chord(root="C", type="maj7", duration=4)` |
+| Drummer | Drum DSL | `pattern(drum=kick, grid="x---x---x---x---")` |
+| JSFX | JSFX/EEL2 | Complete effect code with `@init`, `@sample`, `@slider` |
+
+Each DSL has a Lark grammar definition that specifies valid syntax. GPT-5's CFG tool ensures output conforms to the grammar - no hallucinated function names or invalid syntax.
+
+📖 **Learn more**: [GPT-5 Context-Free Grammar (CFG)](https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools#3-contextfree-grammar-cfg)
 
 ## Quick Start
 
@@ -192,25 +223,113 @@ magda-api/
 │   ├── api/
 │   │   ├── router.go          # Route definitions
 │   │   ├── handlers/          # Request handlers
-│   │   │   ├── magda.go       # DAW agent (chat, plugins, mix)
-│   │   │   ├── jsfx.go        # JSFX agent
-│   │   │   ├── drummer.go     # Drummer agent
-│   │   │   ├── generation.go  # Arranger agent
-│   │   │   └── mix.go         # Mix analysis
 │   │   └── middleware/        # Auth, CORS, Sentry
-│   ├── config/                # Configuration
-│   ├── llm/                   # LLM providers (OpenAI, Gemini)
-│   ├── observability/         # Langfuse integration
+│   ├── agents/                # AI Agents (organized by DAW)
+│   │   ├── core/              # Orchestration & shared config
+│   │   │   ├── coordination/  # Routes requests to agents
+│   │   │   └── config/        # Agent configuration
+│   │   ├── reaper/            # REAPER-specific agents
+│   │   │   ├── daw/           # REAPER control (tracks, clips, FX)
+│   │   │   ├── jsfx/          # JSFX effect generator
+│   │   │   └── plugin/        # Plugin management
+│   │   └── shared/            # DAW-agnostic agents
+│   │       ├── drummer/       # Drum pattern generator
+│   │       ├── arranger/      # Chords, melodies, progressions
+│   │       └── mix/           # Mix analysis
+│   ├── config/                # App configuration
+│   ├── llm/                   # LLM providers (OpenAI)
+│   ├── prompt/                # Prompt builders
 │   └── services/              # DSL parser
 ├── pkg/embedded/              # Embedded prompt resources
 ├── docker-compose.yml
 └── Dockerfile
 ```
 
+## Local Deployment
+
+### Option 1: Docker Compose (Recommended)
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/Conceptual-Machines/magda-api.git
+cd magda-api
+
+# 2. Create .env file
+cat > .env << 'EOF'
+OPENAI_API_KEY=sk-your-key-here
+AUTH_MODE=none
+PORT=8080
+ENVIRONMENT=development
+EOF
+
+# 3. Start the API
+docker compose up -d
+
+# 4. Verify it's running
+curl http://localhost:8080/health
+```
+
+### Option 2: Build from Source
+
+```bash
+# 1. Prerequisites: Go 1.24+
+go version  # Should show 1.24+
+
+# 2. Clone and setup
+git clone https://github.com/Conceptual-Machines/magda-api.git
+cd magda-api
+go mod download
+
+# 3. Set environment
+export OPENAI_API_KEY=sk-your-key-here
+export AUTH_MODE=none
+
+# 4. Run
+go run main.go
+
+# Or build and run binary
+go build -o magda-api main.go
+./magda-api
+```
+
+### Option 3: With REAPER Extension
+
+To use MAGDA with REAPER, you also need the REAPER extension:
+
+```bash
+# 1. Start the API (see above)
+docker compose up -d
+
+# 2. Install magda-reaper extension
+# Download from: https://github.com/Conceptual-Machines/magda-reaper/releases
+# Copy to REAPER UserPlugins folder
+
+# 3. Configure extension to point to API
+# In REAPER: Extensions > MAGDA > Settings
+# Set API URL to: http://localhost:8080
+```
+
+### Verifying Installation
+
+```bash
+# Health check
+curl http://localhost:8080/health
+# Expected: {"status":"healthy",...}
+
+# Test DAW agent
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Create a track called Test", "state": {}}'
+
+# Test JSFX generator
+curl -X POST http://localhost:8080/api/v1/jsfx/generate \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Simple gain plugin", "code": "", "filename": "test.jsfx"}'
+```
+
 ## Related Projects
 
 - **[magda-reaper](https://github.com/Conceptual-Machines/magda-reaper)** - REAPER extension (C++)
-- **[magda-agents-go](https://github.com/Conceptual-Machines/magda-agents-go)** - AI agents library
 - **magda-cloud** - Hosted gateway (auth, billing) - private
 
 ## License
