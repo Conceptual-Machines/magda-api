@@ -37,18 +37,18 @@ agents/
 └── ableton/        # (Future) Ableton Live support
 ```
 
-### CFG-Based Structured Output
+### CFG-Constrained DSL Generation
 
-Most agents use **Context-Free Grammar (CFG)** with OpenAI's GPT-5 for guaranteed structured output:
+Most agents use **Context-Free Grammar (CFG)** with GPT-5 to constrain the LLM to generate valid DSL code:
 
-| Agent | Output Format | CFG Grammar |
-|-------|--------------|-------------|
-| DAW | MAGDA DSL | `track().new_clip()`, `filter().set_track()` |
-| Arranger | Arranger DSL | `chord()`, `arpeggio()`, `progression()` |
-| Drummer | Drum DSL | `pattern(drum=kick, grid="x---x---")` |
-| JSFX | JSFX Code | Complete effect code with `@init`, `@sample` |
+| Agent | DSL | Example |
+|-------|-----|---------|
+| DAW | MAGDA DSL | `track(instrument="Serum").new_clip(bar=1, length_bars=4)` |
+| Arranger | Arranger DSL | `chord(root="C", type="maj7", duration=4)` |
+| Drummer | Drum DSL | `pattern(drum=kick, grid="x---x---x---x---")` |
+| JSFX | JSFX/EEL2 | Complete effect code with `@init`, `@sample`, `@slider` |
 
-CFG ensures the LLM output is always syntactically valid and parseable, eliminating JSON parsing errors and hallucinated syntax.
+The CFG grammar defines the valid syntax (e.g., function names, parameter types) and GPT-5's CFG tool ensures the output conforms to it. This guarantees parseable DSL - no hallucinated function names or invalid syntax.
 
 ## Quick Start
 
