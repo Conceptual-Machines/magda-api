@@ -6,9 +6,13 @@
 
 Stateless Go API for **MAGDA** (**M**ulti-**A**gent **G**enerative **D**AW **A**utomation) - AI-powered music production assistant.
 
-## Overview
+## About
 
-MAGDA API provides AI agents for music production across multiple DAWs:
+MAGDA brings AI directly into your DAW. Instead of switching between apps, describe what you want in plain English and MAGDA handles the rest—creating tracks, generating effects, programming drums, or analyzing your mix.
+
+Built on a multi-agent architecture where specialized AI agents collaborate: a DAW agent translates your intent into actions, an arranger generates musical content, a drummer creates patterns, and a mix agent offers production advice. Each agent is an expert in its domain.
+
+**Key capabilities:**
 
 - 🎹 **DAW Control** - Natural language commands for your DAW
 - 🎸 **JSFX Generation** - AI-assisted audio effect creation (REAPER)
