@@ -13,7 +13,6 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/responses"
-	"gorm.io/gorm"
 )
 
 const (
@@ -24,11 +23,10 @@ const (
 
 type GenerationHandler struct {
 	genService *magdaarranger.GenerationService
-	db         *gorm.DB
 	cfg        *config.Config
 }
 
-func NewGenerationHandler(cfg *config.Config, db *gorm.DB) *GenerationHandler {
+func NewGenerationHandler(cfg *config.Config) *GenerationHandler {
 	// Convert config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
@@ -39,7 +37,6 @@ func NewGenerationHandler(cfg *config.Config, db *gorm.DB) *GenerationHandler {
 
 	return &GenerationHandler{
 		genService: baseService,
-		db:         db,
 		cfg:        cfg,
 	}
 }
@@ -64,12 +61,14 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Get user from context
-	userID, exists := middleware.GetCurrentUserID(c)
+	// Get user from gateway headers (required for this endpoint)
+	userIDStr, exists := middleware.GetUserIDFromGateway(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	// For logging purposes
+	_ = userIDStr
 
 	// Use requested model or default to gpt-5-mini
 	// Allow gpt-5-mini and gpt-5-nano
@@ -124,15 +123,15 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
 
 	// Route based on streaming preference
 	if req.Stream {
-		h.generateStream(c, req, userID, model)
+		h.generateStream(c, req, model)
 		return
 	}
 
-	h.generateOneShot(c, req, userID, model)
+	h.generateOneShot(c, req, model)
 }
 
 // generateOneShot handles non-streaming one-shot generation
-func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, _ uint, model string) {
+func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest, model string) {
 	startTime := time.Now()
 
 	// Use reasoning mode from request, default to "medium" for GPT-5
@@ -275,7 +274,7 @@ func (h *GenerationHandler) extractReasoningTokens(usage any) int {
 	return 0
 }
 
-func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, userID uint, model string) {
+func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, model string) {
 	startTime := time.Now()
 
 	// Use reasoning mode from request, default to "medium"
@@ -284,17 +283,7 @@ func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, 
 		reasoningMode = defaultReasoningMode
 	}
 
-	// User ID already passed as parameter
-	if userID == 0 {
-		errorEvent := magdaarranger.StreamEvent{
-			Type:    "error",
-			Message: "Authentication required",
-		}
-		eventJSON, _ := json.Marshal(errorEvent)
-		_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", eventJSON)
-		c.Writer.Flush()
-		return
-	}
+	// Auth is handled by middleware before reaching this point
 
 	// Create a service (uses default OpenAI provider from config)
 	magdaCfg := &magdaconfig.Config{

@@ -1,26 +1,11 @@
 repos:
-  # Terraform formatting and validation
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.86.0
-    hooks:
-      - id: terraform_fmt
-        args:
-          - --args=-recursive
-      - id: terraform_validate
-      - id: terraform_docs
-        args:
-          - --hook-config=--path-to-file=README.md
-          - --hook-config=--add-to-existing-file=true
-          - --hook-config=--create-file-if-not-exist=true
-
-  # Go formatting and linting
+  # General hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        exclude: ^infra/ansible/inventory\.yml$
       - id: check-added-large-files
         args: ["--maxkb=1000"]
       - id: check-merge-conflict
@@ -62,4 +47,3 @@ repos:
       - id: prettier
         types: [yaml]
         args: [--tab-width=2]
-        exclude: ^infra/ansible/inventory\.yml$|^ansible/inventory\.yml$

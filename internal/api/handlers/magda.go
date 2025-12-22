@@ -18,7 +18,6 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 const (
@@ -30,7 +29,6 @@ type MagdaHandler struct {
 	orchestrator  *magdaorchestrator.Orchestrator
 	pluginService *magdaplugin.PluginAgent
 	mixAgent      *magdamix.MixAnalysisAgent
-	db            *gorm.DB
 	cfg           *config.Config
 }
 
@@ -39,7 +37,7 @@ type PluginInfo = magdaplugin.PluginInfo
 type PluginAlias = magdaplugin.PluginAlias
 type Preferences = magdaplugin.Preferences
 
-func NewMagdaHandler(cfg *config.Config, db *gorm.DB) *MagdaHandler {
+func NewMagdaHandler(cfg *config.Config) *MagdaHandler {
 	// Convert aideas-api config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
@@ -51,7 +49,6 @@ func NewMagdaHandler(cfg *config.Config, db *gorm.DB) *MagdaHandler {
 		orchestrator:  magdaorchestrator.NewOrchestrator(magdaCfg),
 		pluginService: magdaplugin.NewPluginAgent(magdaCfg),
 		mixAgent:      magdamix.NewMixAnalysisAgent(magdaCfg),
-		db:            db,
 		cfg:           cfg,
 	}
 }
@@ -101,10 +98,11 @@ func (h *MagdaHandler) Chat(c *gin.Context) {
 		log.Printf("   State: nil")
 	}
 
-	// Get user from context (optional - MAGDA might be public for now)
-	userID, _ := middleware.GetCurrentUserID(c)
-	if userID > 0 {
-		log.Printf("   User ID: %d", userID)
+	// Get user from gateway headers (if authenticated)
+	var userID string
+	if id, ok := middleware.GetUserIDFromGateway(c); ok {
+		userID = id
+		log.Printf("   User ID: %s", userID)
 	}
 
 	// Start Langfuse trace for observability
@@ -213,8 +211,8 @@ func (h *MagdaHandler) ChatStream(c *gin.Context) {
 		log.Printf("   State has %d keys", len(req.State))
 	}
 
-	// Get user from context
-	_, _ = middleware.GetCurrentUserID(c)
+	// User info available from gateway headers if needed
+	// userID, _ := middleware.GetUserIDFromGateway(c)
 
 	// Set headers for SSE
 	c.Header("Content-Type", "text/event-stream")
@@ -502,10 +500,11 @@ func (h *MagdaHandler) MixAnalyze(c *gin.Context) {
 		log.Printf("   Track: %s (%s)", req.Context.TrackName, req.Context.TrackType)
 	}
 
-	// Get user from context
-	userID, _ := middleware.GetCurrentUserID(c)
-	if userID > 0 {
-		log.Printf("   User ID: %d", userID)
+	// Get user from gateway headers (if authenticated)
+	var userID string
+	if id, ok := middleware.GetUserIDFromGateway(c); ok {
+		userID = id
+		log.Printf("   User ID: %s", userID)
 	}
 
 	// Start Langfuse trace

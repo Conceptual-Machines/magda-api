@@ -11,7 +11,6 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 const (
@@ -21,11 +20,10 @@ const (
 
 type DrummerHandler struct {
 	agent *drummer.DrummerAgent
-	db    *gorm.DB
 	cfg   *config.Config
 }
 
-func NewDrummerHandler(cfg *config.Config, db *gorm.DB) *DrummerHandler {
+func NewDrummerHandler(cfg *config.Config) *DrummerHandler {
 	// Convert config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
@@ -34,7 +32,6 @@ func NewDrummerHandler(cfg *config.Config, db *gorm.DB) *DrummerHandler {
 
 	return &DrummerHandler{
 		agent: agent,
-		db:    db,
 		cfg:   cfg,
 	}
 }
@@ -57,9 +54,9 @@ func (h *DrummerHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// Get user from context (for logging - auth handled by middleware)
-	userID, _ := middleware.GetCurrentUserID(c)
-	log.Printf("🥁 Drummer request from user %d", userID)
+	// Get user from gateway headers (for logging - auth handled by gateway)
+	userID, _ := middleware.GetUserIDFromGateway(c)
+	log.Printf("🥁 Drummer request from user %s", userID)
 
 	// Use requested model or default
 	model := req.Model

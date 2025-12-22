@@ -8,7 +8,6 @@ import (
 
 	"github.com/Conceptual-Machines/magda-api/internal/api"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
-	"github.com/Conceptual-Machines/magda-api/internal/database"
 	"github.com/Conceptual-Machines/magda-api/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
@@ -37,16 +36,16 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Initialize Sentry
+	// Initialize Sentry (optional)
 	if cfg.SentryDSN != "" {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              cfg.SentryDSN,
 			Environment:      cfg.Environment,
-			Release:          "magda-api@" + releaseVersion,            // Use embedded release version
-			EnableTracing:    true,                                     // Enable tracing for spans
-			TracesSampleRate: 1.0,                                      // 100% sampling for now, adjust based on volume
-			EnableLogs:       true,                                     // Enable Sentry Logs feature
-			Debug:            cfg.Environment != environmentProduction, // Enable debug in non-prod
+			Release:          "magda-api@" + releaseVersion,
+			EnableTracing:    true,
+			TracesSampleRate: 1.0,
+			EnableLogs:       true,
+			Debug:            cfg.Environment != environmentProduction,
 			BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 				// Filter out sensitive data
 				if event.Request != nil {
@@ -58,15 +57,13 @@ func main() {
 			log.Printf("Failed to initialize Sentry: %v", err)
 		} else {
 			log.Printf("✅ Sentry initialized (environment: %s, release: %s)", cfg.Environment, releaseVersion)
-			// Flush on shutdown
 			defer sentry.Flush(sentryFlushTimeout)
 		}
 	} else {
 		log.Println("⚠️  Sentry not configured (SENTRY_DSN not set)")
 	}
 
-	// Initialize Langfuse for LLM observability
-	// Set environment variables for the SDK (it reads from env vars)
+	// Initialize Langfuse for LLM observability (optional)
 	if cfg.LangfuseEnabled && cfg.LangfuseSecretKey != "" {
 		os.Setenv("LANGFUSE_PUBLIC_KEY", cfg.LangfusePublicKey)
 		os.Setenv("LANGFUSE_SECRET_KEY", cfg.LangfuseSecretKey)
@@ -76,34 +73,24 @@ func main() {
 	}
 	observability.InitializeLangfuse(context.Background(), cfg)
 
-	// Initialize database
-	db, err := database.Connect(cfg.DatabaseURL)
-	if err != nil {
-		sentry.CaptureException(err)
-		log.Fatal("Failed to connect to database:", err)
-	}
-
-	// Run migrations
-	if err := database.Migrate(db); err != nil {
-		sentry.CaptureException(err)
-		log.Fatal("Failed to run migrations:", err)
-	}
+	// Log auth mode
+	log.Printf("🔐 Auth mode: %s", cfg.AuthMode)
 
 	// Set Gin mode
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Initialize router
-	router := api.SetupRouter(db, cfg, GetVersion())
+	// Initialize router (no database needed)
+	router := api.SetupRouter(cfg, GetVersion())
 
 	// Start server
-	port := os.Getenv("PORT")
+	port := cfg.Port
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("🚀 Starting server on port %s", port)
+	log.Printf("🚀 Starting magda-api on port %s", port)
 	if err := router.Run(":" + port); err != nil {
 		sentry.CaptureException(err)
 		log.Fatal("Failed to start server:", err)

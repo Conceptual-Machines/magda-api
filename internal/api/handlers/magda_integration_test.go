@@ -58,7 +58,7 @@ func setupTestRouter() *gin.Engine {
 
 	// MAGDA endpoint (without auth for testing)
 	// Note: In production this would require JWT auth
-	magdaHandler := NewMagdaHandler(cfg, nil)
+	magdaHandler := NewMagdaHandler(cfg)
 	router.POST("/api/v1/magda/chat", magdaHandler.Chat)
 
 	return router

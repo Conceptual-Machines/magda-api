@@ -10,10 +10,9 @@ import (
 
 	"github.com/Conceptual-Machines/magda-agents-go/agents/jsfx"
 	agentconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
-	"github.com/Conceptual-Machines/magda-api/internal/middleware"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // Log truncation limits
@@ -31,11 +30,10 @@ const (
 // JSFXHandler handles JSFX generation requests
 type JSFXHandler struct {
 	agent *jsfx.JSFXAgent
-	db    *gorm.DB
 }
 
 // NewJSFXHandler creates a new JSFX handler
-func NewJSFXHandler(cfg *config.Config, db *gorm.DB) *JSFXHandler {
+func NewJSFXHandler(cfg *config.Config) *JSFXHandler {
 	// Create agent config from API config
 	agentCfg := &agentconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
@@ -43,7 +41,6 @@ func NewJSFXHandler(cfg *config.Config, db *gorm.DB) *JSFXHandler {
 
 	return &JSFXHandler{
 		agent: jsfx.NewJSFXAgent(agentCfg),
-		db:    db,
 	}
 }
 
@@ -89,10 +86,9 @@ func (h *JSFXHandler) Generate(c *gin.Context) {
 	log.Printf("   Code length: %d bytes", len(req.Code))
 	log.Printf("   Filename: %s", req.Filename)
 
-	// Get user from context
-	userID, _ := middleware.GetCurrentUserID(c)
-	if userID > 0 {
-		log.Printf("   User ID: %d", userID)
+	// Get user from gateway headers (if authenticated)
+	if userID, ok := middleware.GetUserIDFromGateway(c); ok {
+		log.Printf("   User ID: %s", userID)
 	}
 
 	// Build input messages for the agent
@@ -226,10 +222,9 @@ func (h *JSFXHandler) GenerateStream(c *gin.Context) {
 		"message": "Generating JSFX...",
 	})
 
-	// Get user from context
-	userID, _ := middleware.GetCurrentUserID(c)
-	if userID > 0 {
-		log.Printf("   User ID: %d", userID)
+	// Get user from gateway headers (if authenticated)
+	if userID, ok := middleware.GetUserIDFromGateway(c); ok {
+		log.Printf("   User ID: %s", userID)
 	}
 
 	// Build input messages for the agent
