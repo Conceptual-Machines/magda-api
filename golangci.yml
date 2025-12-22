@@ -80,3 +80,12 @@ issues:
       linters:
         - dupl
         - lll
+        - nolintlint
+    # Agent code has music-specific magic numbers (MIDI notes, beat positions, etc.)
+    - path: internal/agents/.*\.go
+      linters:
+        - mnd
+    # LLM provider has complex logic - allow nolint directives
+    - path: internal/llm/.*\.go
+      linters:
+        - nolintlint
