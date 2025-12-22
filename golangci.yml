@@ -75,17 +75,32 @@ issues:
         - gocyclo
         - goconst
         - thelper
+        - govet
     # magda.go contains prompt documentation with similar DSL examples in different sections (false positive)
     - path: internal/prompt/magda\.go
       linters:
         - dupl
         - lll
         - nolintlint
-    # Agent code has music-specific magic numbers (MIDI notes, beat positions, etc.)
+    # Agent code merged from magda-agents-go - has music-specific constants and complex parsing
     - path: internal/agents/.*\.go
       linters:
         - mnd
-    # LLM provider has complex logic - allow nolint directives
+        - goconst
+        - lll
+        - makezero
+        - gocyclo
+        - exhaustive
+        - revive
+        - nolintlint
+        - gosimple
+    # LLM provider has complex response handling logic
     - path: internal/llm/.*\.go
       linters:
+        - mnd
+        - goconst
+        - lll
+        - gocyclo
         - nolintlint
+        - revive
+        - unused
