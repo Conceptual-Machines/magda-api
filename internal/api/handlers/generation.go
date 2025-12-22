@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	magdaarranger "github.com/Conceptual-Machines/magda-api/internal/agents/arranger"
-	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
+	magdaarranger "github.com/Conceptual-Machines/magda-api/internal/agents/shared/arranger"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"

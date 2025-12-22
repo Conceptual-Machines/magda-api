@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/core/config"
 	"github.com/stretchr/testify/require"
 )
 

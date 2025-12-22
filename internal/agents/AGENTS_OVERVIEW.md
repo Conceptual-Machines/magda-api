@@ -1,26 +1,75 @@
 # MAGDA Agents Overview
 
-## Current Agents
+## Directory Structure
 
-### 1. **DAW Agent** ✅
+```
+internal/agents/
+├── core/                    # Orchestration & shared config
+│   ├── coordination/        # Agent orchestrator (routes requests)
+│   └── config/             # Agent configuration
+│
+├── reaper/                  # REAPER-specific agents
+│   ├── daw/                # REAPER DAW control agent
+│   ├── jsfx/               # JSFX effect generator
+│   └── plugin/             # Plugin management
+│
+├── shared/                  # DAW-agnostic agents
+│   ├── drummer/            # Drum pattern generator
+│   ├── arranger/           # Musical content (chords, melodies)
+│   └── mix/                # Mix analysis agent
+│
+└── (future) ableton/        # Ableton-specific agents
+    ├── daw/
+    └── devices/
+```
+
+## Core Agents
+
+### **Coordination/Orchestrator** (`core/coordination/`)
+**Purpose**: Routes user requests to appropriate agents
+**Knows**: Agent capabilities, request classification
+**Generates**: Coordinated responses from multiple agents
+
+## REAPER-Specific Agents (`reaper/`)
+
+### **DAW Agent** (`reaper/daw/`) ✅
 **Purpose**: Understands REAPER API structure and generates actions
 **Knows**: Track creation, clip placement, FX routing, REAPER object hierarchy
 **Generates**: REAPER API actions (create_track, add_fx, etc.)
 
-### 2. **Arranger Agent** ✅
+### **JSFX Agent** (`reaper/jsfx/`) ✅
+**Purpose**: Generates JSFX audio effects code
+**Knows**: JSFX syntax, DSP algorithms, audio processing
+**Generates**: Complete JSFX effect code
+
+### **Plugin Agent** (`reaper/plugin/`) ✅
+**Purpose**: Plugin management, deduplication, alias generation
+**Knows**: Plugin formats, naming conventions, preferences
+**Generates**: Plugin aliases and deduplication mappings
+
+## Shared/DAW-Agnostic Agents (`shared/`)
+
+### **Arranger Agent** (`shared/arranger/`) ✅
 **Purpose**: Generates musical content (chords, melodies, progressions)
 **Knows**: Music theory, chord progressions, Roman numerals, chord symbols
 **Generates**: NoteEvent arrays from musical descriptions
 
-### 3. **Automation Agent** 📝 (Designed)
+### **Drummer Agent** (`shared/drummer/`) ✅
+**Purpose**: Generates drum patterns
+**Knows**: Drum patterns, rhythms, grooves
+**Generates**: Grid-based drum patterns
+
+### **Mix/Analysis Agent** (`shared/mix/`) ✅
+**Purpose**: DSP analysis + mixing/mastering recommendations
+**Knows**: Audio analysis, frequency spectrum, dynamics, mixing techniques
+**Generates**: Analysis insights and mixing recommendations
+
+## Designed But Not Implemented
+
+### **Automation Agent** 📝 (Designed)
 **Purpose**: Draws automation curves for volume, pan, FX parameters
 **Knows**: Curve types, interpolation, musical timing, envelope shapes
 **Generates**: AutomationCurve with points and interpolation settings
-
-### 4. **Plugin Agent** ✅
-**Purpose**: Plugin management, deduplication, alias generation
-**Knows**: Plugin formats, naming conventions, preferences
-**Generates**: Plugin aliases and deduplication mappings
 
 ## Proposed Additional Agents
 
