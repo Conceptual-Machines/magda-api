@@ -42,9 +42,8 @@ func TestOrchestrator_Integration_DrummerAndDAW(t *testing.T) {
 
 				for _, action := range result.Actions {
 					actionType, _ := action["action"].(string)
-					drumType, _ := action["type"].(string)
 
-					if drumType == "drum_pattern" {
+					if actionType == "drum_pattern" {
 						hasDrumPattern = true
 						t.Logf("🥁 Found drum_pattern: drum=%v, grid=%v", action["drum"], action["grid"])
 					}
@@ -75,13 +74,12 @@ func TestOrchestrator_Integration_DrummerAndDAW(t *testing.T) {
 
 				for _, action := range result.Actions {
 					actionType, _ := action["action"].(string)
-					drumType, _ := action["type"].(string)
 
 					if actionType == "create_track" {
 						hasTrackCreation = true
 					}
 
-					if drumType == "drum_pattern" {
+					if actionType == "drum_pattern" {
 						hasDrumPattern = true
 						t.Logf("🥁 Found drum_pattern: drum=%v", action["drum"])
 					}
@@ -105,13 +103,12 @@ func TestOrchestrator_Integration_DrummerAndDAW(t *testing.T) {
 
 				for _, action := range result.Actions {
 					actionType, _ := action["action"].(string)
-					drumType, _ := action["type"].(string)
 
 					if actionType == "create_track" {
 						hasTrackCreation = true
 					}
 
-					if drumType == "drum_pattern" {
+					if actionType == "drum_pattern" {
 						hasDrumPattern = true
 						t.Logf("🥁 Found drum_pattern: drum=%v", action["drum"])
 					}
@@ -132,9 +129,9 @@ func TestOrchestrator_Integration_DrummerAndDAW(t *testing.T) {
 
 				hasDrumPattern := false
 				for _, action := range result.Actions {
-					drumType, _ := action["type"].(string)
+					actionType, _ := action["action"].(string)
 
-					if drumType == "drum_pattern" {
+					if actionType == "drum_pattern" {
 						hasDrumPattern = true
 						t.Logf("🥁 Found drum_pattern: drum=%v", action["drum"])
 					}
@@ -257,12 +254,11 @@ func TestOrchestrator_Integration_DrummerWithArranger(t *testing.T) {
 
 			for _, action := range result.Actions {
 				actionType, _ := action["action"].(string)
-				drumType, _ := action["type"].(string)
 
 				if actionType == "create_track" {
 					trackCount++
 				}
-				if drumType == "drum_pattern" || actionType == "drum_pattern" {
+				if actionType == "drum_pattern" {
 					drumPatternCount++
 				}
 				if actionType == "add_midi" {
