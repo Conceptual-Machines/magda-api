@@ -37,6 +37,19 @@ agents/
 └── ableton/        # (Future) Ableton Live support
 ```
 
+### CFG-Based Structured Output
+
+Most agents use **Context-Free Grammar (CFG)** with OpenAI's GPT-5 for guaranteed structured output:
+
+| Agent | Output Format | CFG Grammar |
+|-------|--------------|-------------|
+| DAW | MAGDA DSL | `track().new_clip()`, `filter().set_track()` |
+| Arranger | Arranger DSL | `chord()`, `arpeggio()`, `progression()` |
+| Drummer | Drum DSL | `pattern(drum=kick, grid="x---x---")` |
+| JSFX | JSFX Code | Complete effect code with `@init`, `@sample` |
+
+CFG ensures the LLM output is always syntactically valid and parseable, eliminating JSON parsing errors and hallucinated syntax.
+
 ## Quick Start
 
 ### Docker (Recommended)
