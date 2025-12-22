@@ -8,8 +8,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/Conceptual-Machines/magda-agents-go/agents/jsfx"
-	agentconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	agentconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/jsfx"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"

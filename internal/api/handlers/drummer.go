@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Conceptual-Machines/magda-agents-go/agents/drummer"
-	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
+	"github.com/Conceptual-Machines/magda-api/internal/agents/drummer"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
