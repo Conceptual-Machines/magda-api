@@ -71,11 +71,12 @@ issues:
       linters:
         - dupl
         - gomnd
+        - mnd
         - gocyclo
         - goconst
-    # Allow stuttering in internal agent packages (daw.DawAgent, plugin.PluginAgent, etc.)
-    # This is acceptable for internal packages where the package name provides context
-    - path: internal/agents/.*\.go
+        - thelper
+    # magda.go contains prompt documentation with similar DSL examples in different sections (false positive)
+    - path: internal/prompt/magda\.go
       linters:
-        - revive
-      text: "that stutters"
+        - dupl
+        - lll
