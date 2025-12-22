@@ -39,7 +39,7 @@ agents/
 
 ### CFG-Constrained DSL Generation
 
-Most agents use **Context-Free Grammar (CFG)** with GPT-5 to constrain the LLM to generate valid DSL code:
+Most agents use **Context-Free Grammar (CFG)** with GPT-5 to constrain the LLM to generate valid DSL code. We use the [grammar-school-go](https://github.com/Conceptual-Machines/grammar-school-go) library to build CFG tool payloads.
 
 | Agent | DSL | Example |
 |-------|-----|---------|
@@ -48,7 +48,9 @@ Most agents use **Context-Free Grammar (CFG)** with GPT-5 to constrain the LLM t
 | Drummer | Drum DSL | `pattern(drum=kick, grid="x---x---x---x---")` |
 | JSFX | JSFX/EEL2 | Complete effect code with `@init`, `@sample`, `@slider` |
 
-The CFG grammar defines the valid syntax (e.g., function names, parameter types) and GPT-5's CFG tool ensures the output conforms to it. This guarantees parseable DSL - no hallucinated function names or invalid syntax.
+Each DSL has a Lark grammar definition that specifies valid syntax. GPT-5's CFG tool ensures output conforms to the grammar - no hallucinated function names or invalid syntax.
+
+📖 **Learn more**: [GPT-5 Context-Free Grammar (CFG)](https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools#3-contextfree-grammar-cfg)
 
 ## Quick Start
 
