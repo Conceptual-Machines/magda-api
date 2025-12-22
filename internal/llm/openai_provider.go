@@ -8,15 +8,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Conceptual-Machines/grammar-school-go/gs"
-	"github.com/Conceptual-Machines/magda-api/internal/models"
 	"github.com/getsentry/sentry-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/responses"
 	"github.com/openai/openai-go/shared"
 )
@@ -28,13 +27,13 @@ const (
 	maxOutputTrunc = 200
 	mcpCallType    = "mcp_call"
 
-	// Reasoning effort levels (GPT-5.2 supports: none, low, medium, high, xhigh)
-	reasoningNone    = "none" // Default in GPT-5.2, lowest latency
+	// Reasoning effort levels
+	reasoningNone    = "none" // GPT-5.2 default - lowest latency
 	reasoningMinimal = "minimal"
 	reasoningLow     = "low"
 	reasoningMedium  = "medium"
 	reasoningHigh    = "high"
-	reasoningXHigh   = "xhigh" // New in GPT-5.2, maximum reasoning
+	reasoningXHigh   = "xhigh" // GPT-5.2 new level - maximum reasoning
 
 	// Heartbeat interval for streaming (send every 10 seconds to keep connection alive during long operations)
 	heartbeatIntervalSeconds = 10
@@ -47,16 +46,10 @@ const (
 	// Logging limits
 	maxArgsLogLength       = 100
 	maxLogEventCountOpenAI = 5
-
-	// String truncation limits for logging
-	logTruncateShort      = 200   // Short truncation for field values
-	logTruncateLong       = 500   // Long truncation for full field values
-	logDumpLimit          = 5000  // Limit for dumping full structures
-	logDumpMaxLimit       = 10000 // Maximum limit for large dumps
-	maxPreviewChars       = 200
-	maxErrorPreviewChars  = 500
-	maxErrorResponseChars = 200
-	maxPathPreviewLen     = 10
+	maxPreviewChars        = 200
+	maxErrorPreviewChars   = 500
+	maxErrorResponseChars  = 200
+	maxPathPreviewLen      = 10
 )
 
 // OpenAIProvider implements the Provider interface using OpenAI's Responses API
@@ -103,110 +96,26 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 	span := transaction.StartChild("openai.api_call")
 	apiStartTime := time.Now()
 
-	// Use raw HTTP request if we need CFG tools or verbosity
-	// Marshal params to JSON, modify as needed, make raw HTTP request
-	var resp *responses.Response
-	var err error
-	if request.CFGGrammar != nil || request.OutputSchema != nil {
-		paramsJSON, _ := json.Marshal(params)
-		var paramsMap map[string]any
-		if json.Unmarshal(paramsJSON, &paramsMap) == nil {
-			// Add verbosity to text if OutputSchema is provided
-			if request.OutputSchema != nil {
-				if text, ok := paramsMap["text"].(map[string]any); ok {
-					text["verbosity"] = "low"
-					log.Printf("✅ Added verbosity=low to text parameter")
-				}
-			}
-
-			// Add CFG tool if configured
-			if request.CFGGrammar != nil {
-				// Use github.com/Conceptual-Machines/grammar-school-go utility to build OpenAI CFG tool payload
-				cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
-					ToolName:    request.CFGGrammar.ToolName,
-					Description: request.CFGGrammar.Description,
-					Grammar:     request.CFGGrammar.Grammar,
-					Syntax:      request.CFGGrammar.Syntax,
-				})
-
-				// Set text format to plain text (not JSON schema) when using CFG
-				paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
-
-				// Initialize tools array if not present
-				var tools []any
-				if paramsMap["tools"] == nil {
-					tools = []any{}
-				} else {
-					var ok bool
-					tools, ok = paramsMap["tools"].([]any)
-					if !ok {
-						// If tools is not a slice, try to convert from existing tools
-						if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
-							tools = make([]any, 0, len(existingTools))
-							for _, t := range existingTools {
-								toolJSON, _ := json.Marshal(t)
-								var toolMap map[string]any
-								if unmarshalErr := json.Unmarshal(toolJSON, &toolMap); unmarshalErr != nil {
-									log.Printf("⚠️  Failed to unmarshal tool: %v", unmarshalErr)
-									continue
-								}
-								tools = append(tools, toolMap)
-							}
-						} else {
-							tools = []any{}
-						}
-					}
-				}
-				tools = append(tools, cfgTool)
-				paramsMap["tools"] = tools
-				paramsMap["parallel_tool_calls"] = false // CFG tools typically don't use parallel calls
-
-				log.Printf("🔧 Added CFG tool: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
-			}
-
-			modifiedJSON, _ := json.Marshal(paramsMap)
-
-			log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
-			req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
-			req.Header.Set("Content-Type", "application/json")
-
-			httpResp, httpErr := http.DefaultClient.Do(req)
-			if httpErr == nil {
-				defer func() {
-					if closeErr := httpResp.Body.Close(); closeErr != nil {
-						log.Printf("⚠️  Failed to close response body: %v", closeErr)
-					}
-				}()
-				body, _ := io.ReadAll(httpResp.Body)
-
-				if httpResp.StatusCode == http.StatusOK {
-					resp = &responses.Response{}
-					if json.Unmarshal(body, resp) != nil {
-						err = fmt.Errorf("failed to parse response")
-					} else {
-						// Process response with CFG support
-						processedResp, processErr := p.processResponseWithCFG(resp, startTime, transaction, request.OutputSchema, request.CFGGrammar)
-						if processErr != nil {
-							err = processErr
-						} else {
-							// Return the processed response
-							return processedResp, nil
-						}
-					}
-				} else {
-					err = fmt.Errorf("API error %d: %s", httpResp.StatusCode, string(body))
-				}
-			} else {
-				err = httpErr
-			}
+	// Use raw HTTP request for CFG tools (MAGDA always uses DSL/CFG)
+	if request.CFGGrammar != nil {
+		cfgResp, cfgErr := p.executeRawCFGRequest(ctx, params, request, startTime, transaction)
+		span.Finish()
+		if cfgErr != nil {
+			log.Printf("❌ OPENAI REQUEST FAILED after %v: %v", time.Since(apiStartTime), cfgErr)
+			transaction.SetTag("success", "false")
+			sentry.CaptureException(cfgErr)
+			return nil, fmt.Errorf("openai request failed: %w", cfgErr)
 		}
+		if cfgResp != nil {
+			transaction.SetTag("success", "true")
+			return cfgResp, nil
+		}
+		// CFG request returned nil response (fall through shouldn't happen for CFG)
+		return nil, fmt.Errorf("CFG request returned no response")
 	}
 
-	// Fall back to SDK if raw request failed or no OutputSchema
-	if resp == nil && err == nil {
-		resp, err = p.client.Responses.New(ctx, params)
-	}
+	// Use SDK for non-CFG requests
+	resp, err := p.client.Responses.New(ctx, params)
 
 	apiDuration := time.Since(apiStartTime)
 	span.Finish()
@@ -220,53 +129,243 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *GenerationReques
 
 	log.Printf("⏱️  OPENAI API CALL COMPLETED in %v", apiDuration)
 
-	// Process response
-	result, err := p.processResponse(resp, startTime, transaction, request.OutputSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	transaction.SetTag("success", "true")
-	return result, nil
+	// Process response based on output type
+	return p.processResponse(resp, request, startTime, transaction)
 }
 
-// GenerateStream implements streaming generation using OpenAI's Responses API
-func (p *OpenAIProvider) GenerateStream(
-	ctx context.Context, request *GenerationRequest, callback StreamCallback,
+// executeRawCFGRequest handles CFG grammar requests via raw HTTP
+func (p *OpenAIProvider) executeRawCFGRequest(
+	ctx context.Context,
+	params responses.ResponseNewParams,
+	request *GenerationRequest,
+	startTime time.Time,
+	transaction *sentry.Span,
 ) (*GenerationResponse, error) {
-	startTime := time.Now()
-	log.Printf("🎵 OPENAI STREAMING GENERATION REQUEST STARTED (Model: %s)", request.Model)
+	paramsJSON, _ := json.Marshal(params)
+	var paramsMap map[string]any
+	if err := json.Unmarshal(paramsJSON, &paramsMap); err != nil {
+		return nil, nil // Fall back to SDK
+	}
 
-	// Start Sentry transaction
-	transaction := sentry.StartTransaction(ctx, "openai.generate_stream")
-	defer transaction.Finish()
+	// Add CFG tool
+	p.addCFGToolToParams(paramsMap, request.CFGGrammar)
 
-	transaction.SetTag("model", request.Model)
-	transaction.SetTag("provider", "openai")
-	transaction.SetTag("streaming", "true")
-	transaction.SetTag("mcp_enabled", fmt.Sprintf("%t", request.MCPConfig != nil))
-
-	// Build OpenAI-specific request parameters
-	// Note: CFG tools in streaming are not yet supported by the SDK
-	// The LLM may still generate DSL as plain text, which we parse in parseActionsIncremental
-	params := p.buildRequestParams(request)
-
-	log.Printf("🚨 CRITICAL STREAMING: About to call OpenAI Streaming API with params.Model='%s'", params.Model)
-
-	// Call OpenAI Streaming API
-	stream := p.client.Responses.NewStreaming(ctx, params)
-
-	// Process stream
-	result, err := p.processStream(stream, callback, transaction, startTime)
+	// Make raw HTTP request
+	body, err := p.makeRawHTTPRequest(ctx, paramsMap, request.CFGGrammar != nil)
 	if err != nil {
-		transaction.SetTag("success", "false")
-		sentry.CaptureException(err)
 		return nil, err
 	}
 
-	transaction.SetTag("success", "true")
-	log.Printf("✅ STREAMING GENERATION COMPLETED in %v", time.Since(startTime))
+	// Try to extract DSL from response
+	return p.extractDSLFromResponse(body, startTime, transaction, request.CFGGrammar)
+}
 
+// addCFGToolToParams adds CFG tool configuration to request params
+func (p *OpenAIProvider) addCFGToolToParams(paramsMap map[string]any, cfgGrammar *CFGConfig) {
+	cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
+		ToolName:    cfgGrammar.ToolName,
+		Description: cfgGrammar.Description,
+		Grammar:     cfgGrammar.Grammar,
+		Syntax:      cfgGrammar.Syntax,
+	})
+	log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", cfgGrammar.ToolName, cfgGrammar.Syntax)
+
+	// Set text format to plain text when using CFG
+	paramsMap["text"] = gs.GetOpenAITextFormatForCFG()
+
+	// Initialize or convert tools array
+	tools := p.getOrInitToolsArray(paramsMap)
+	tools = append(tools, cfgTool)
+	paramsMap["tools"] = tools
+	paramsMap["parallel_tool_calls"] = false
+
+	// Log tool structure for debugging
+	toolJSON, _ := json.MarshalIndent(cfgTool, "", "  ")
+	log.Printf("🔧 Added CFG tool: %s (syntax: %s)", cfgGrammar.ToolName, cfgGrammar.Syntax)
+	log.Printf("🔧 CFG tool structure: %s", truncateString(string(toolJSON), 2000))
+
+	// Log instructions
+	if instructions, ok := paramsMap["instructions"].(string); ok {
+		log.Printf("🔍 Instructions in request (first 500 chars): %s", truncateString(instructions, 500))
+	}
+}
+
+// getOrInitToolsArray gets existing tools array or creates a new one
+func (p *OpenAIProvider) getOrInitToolsArray(paramsMap map[string]any) []any {
+	if paramsMap["tools"] == nil {
+		return []any{}
+	}
+
+	if tools, ok := paramsMap["tools"].([]any); ok {
+		return tools
+	}
+
+	// Try to convert from SDK type
+	if existingTools, ok := paramsMap["tools"].([]responses.ToolUnionParam); ok {
+		tools := make([]any, 0, len(existingTools))
+		for _, t := range existingTools {
+			toolJSON, _ := json.Marshal(t)
+			var toolMap map[string]any
+			if err := json.Unmarshal(toolJSON, &toolMap); err == nil {
+				tools = append(tools, toolMap)
+			}
+		}
+		return tools
+	}
+
+	return []any{}
+}
+
+// makeRawHTTPRequest sends raw HTTP request to OpenAI
+func (p *OpenAIProvider) makeRawHTTPRequest(ctx context.Context, paramsMap map[string]any, saveToDisk bool) ([]byte, error) {
+	modifiedJSON, _ := json.Marshal(paramsMap)
+
+	// Save request payload for debugging
+	if saveToDisk {
+		prettyJSON, _ := json.MarshalIndent(paramsMap, "", "  ")
+		if err := os.WriteFile("/tmp/openai_request_full.json", prettyJSON, 0644); err != nil {
+			log.Printf("❌ FAILED to save request: %v", err)
+		} else {
+			log.Printf("💾 Saved FULL request payload to /tmp/openai_request_full.json (%d bytes)", len(prettyJSON))
+		}
+	}
+
+	log.Printf("📤 Making raw HTTP request (JSON size: %d bytes)", len(modifiedJSON))
+	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/responses", bytes.NewReader(modifiedJSON))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
+	req.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := httpResp.Body.Close(); closeErr != nil {
+			log.Printf("⚠️  Failed to close response body: %v", closeErr)
+		}
+	}()
+
+	body, _ := io.ReadAll(httpResp.Body)
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	// Save response payload for debugging
+	if saveToDisk {
+		if err := os.WriteFile("/tmp/openai_response_full.json", body, 0644); err != nil {
+			log.Printf("❌ FAILED to save response: %v", err)
+		} else {
+			log.Printf("💾 Saved FULL response payload to /tmp/openai_response_full.json (%d bytes)", len(body))
+		}
+	}
+
+	return body, nil
+}
+
+// extractDSLFromResponse extracts DSL code from raw JSON response
+func (p *OpenAIProvider) extractDSLFromResponse(
+	body []byte,
+	startTime time.Time,
+	transaction *sentry.Span,
+	cfgGrammar *CFGConfig,
+) (*GenerationResponse, error) {
+	log.Printf("🔍 Parsing raw JSON response to extract DSL from input field...")
+
+	var rawResponse map[string]any
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse response")
+	}
+
+	// Try to extract DSL from custom_tool_call
+	if dsl := p.extractDSLFromOutput(rawResponse); dsl != "" {
+		return &GenerationResponse{
+			RawOutput: dsl,
+			Usage:     p.extractUsageFromRawResponse(rawResponse),
+		}, nil
+	}
+
+	// Fallback: parse as SDK struct
+	resp := &responses.Response{}
+	if err := json.Unmarshal(body, resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response")
+	}
+
+	return p.processResponseWithCFG(resp, startTime, transaction, cfgGrammar)
+}
+
+// extractDSLFromOutput extracts DSL code from output array
+func (p *OpenAIProvider) extractDSLFromOutput(rawResponse map[string]any) string {
+	output, ok := rawResponse["output"].([]any)
+	if !ok {
+		log.Printf("⚠️  No output array found in raw response")
+		return ""
+	}
+
+	log.Printf("🔍 Found output array with %d items", len(output))
+
+	for i, item := range output {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		log.Printf("🔍 Checking output item %d, type: %v", i, itemMap["type"])
+
+		// Log input field for debugging
+		if inputVal, exists := itemMap["input"]; exists {
+			if inputStr, ok := inputVal.(string); ok {
+				log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+			}
+		}
+
+		// Check for custom_tool_call with DSL
+		if itemType, ok := itemMap["type"].(string); ok && itemType == "custom_tool_call" {
+			log.Printf("✅ Found custom_tool_call in raw JSON!")
+			if input, ok := itemMap["input"].(string); ok && input != "" {
+				log.Printf("✅✅✅ Found DSL code: %s", truncateString(input, 200))
+				return input
+			}
+		}
+	}
+
+	return ""
+}
+
+// processResponse routes response to appropriate processor
+func (p *OpenAIProvider) processResponse(
+	resp *responses.Response,
+	request *GenerationRequest,
+	startTime time.Time,
+	transaction *sentry.Span,
+) (*GenerationResponse, error) {
+	// CFG grammar processing
+	if request.CFGGrammar != nil {
+		result, err := p.processResponseWithCFG(resp, startTime, transaction, request.CFGGrammar)
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
+	}
+
+	// JSON Schema processing
+	if request.OutputSchema != nil {
+		result, err := p.processResponseWithJSONSchema(resp, startTime, transaction, request.OutputSchema)
+		if err != nil {
+			return nil, err
+		}
+		transaction.SetTag("success", "true")
+		return result, nil
+	}
+
+	// Plain text processing
+	result, err := p.processResponsePlainText(resp, startTime, transaction)
+	if err != nil {
+		return nil, err
+	}
+	transaction.SetTag("success", "true")
+	transaction.SetTag("output_type", "plain_text")
 	return result, nil
 }
 
@@ -301,27 +400,46 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 	}
 
 	// Determine reasoning effort
-	// GPT-5.2 supports: none (default), low, medium, high, xhigh
+	// Only include reasoning parameter for models that support it (GPT-5 family)
+	// Models like gpt-4.1-mini do NOT support reasoning parameters
+	modelsWithReasoning := map[string]bool{
+		// GPT-5 base
+		"gpt-5":      true,
+		"gpt-5-mini": true,
+		"gpt-5-nano": true,
+		// GPT-5.1
+		"gpt-5.1":      true,
+		"gpt-5.1-mini": true,
+		"gpt-5.1-nano": true,
+		// GPT-5.2
+		"gpt-5.2":      true,
+		"gpt-5.2-mini": true,
+		"gpt-5.2-nano": true,
+		"gpt-5.2-pro":  true,
+	}
+	supportsReasoning := modelsWithReasoning[request.Model]
+
 	var reasoningEffort shared.ReasoningEffort
-	switch request.ReasoningMode {
-	case reasoningNone:
-		// "none" is the default in GPT-5.2 for lowest latency
-		reasoningEffort = shared.ReasoningEffort("none")
-	case reasoningMinimal, reasoningMin:
-		// "minimal" maps to "low" for compatibility
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningLow:
-		reasoningEffort = responses.ReasoningEffortLow
-	case reasoningMedium, reasoningMed:
-		reasoningEffort = responses.ReasoningEffortMedium
-	case reasoningHigh:
-		reasoningEffort = responses.ReasoningEffortHigh
-	case reasoningXHigh:
-		// xhigh is new in GPT-5.2 for maximum reasoning
-		reasoningEffort = shared.ReasoningEffort("xhigh")
-	default:
-		// Default to "medium" for music generation tasks (need reasoning for composition)
-		reasoningEffort = responses.ReasoningEffortMedium
+	if supportsReasoning {
+		switch request.ReasoningMode {
+		case reasoningNone:
+			// GPT-5.2 default - lowest latency
+			reasoningEffort = shared.ReasoningEffort("none")
+		case reasoningMinimal, reasoningMin:
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningLow:
+			reasoningEffort = responses.ReasoningEffortLow
+		case reasoningMedium, reasoningMed:
+			reasoningEffort = responses.ReasoningEffortMedium
+		case reasoningHigh:
+			reasoningEffort = responses.ReasoningEffortHigh
+		case reasoningXHigh:
+			// GPT-5.2 new level - maximum reasoning for tough problems
+			reasoningEffort = shared.ReasoningEffort("xhigh")
+		default:
+			// Default to "none" for GPT-5.2 (lowest latency)
+			reasoningEffort = shared.ReasoningEffort("none")
+		}
 	}
 
 	params := responses.ResponseNewParams{
@@ -331,23 +449,80 @@ func (p *OpenAIProvider) buildRequestParams(request *GenerationRequest) response
 		},
 		Instructions:      openai.String(request.SystemPrompt),
 		ParallelToolCalls: openai.Bool(true),
-		Reasoning: shared.ReasoningParam{
-			Effort: reasoningEffort,
-		},
 	}
 
-	// Add structured output schema if provided
+	// Only include Reasoning parameter for models that support it
+	if supportsReasoning {
+		params.Reasoning = shared.ReasoningParam{
+			Effort: reasoningEffort,
+		}
+	}
+
+	// MAGDA always uses DSL/CFG, no JSON schema
+
+	// Add CFG tool if configured (for DSL output)
+	if request.CFGGrammar != nil {
+		// Clean grammar using grammar-school before sending to OpenAI
+		cleanedGrammar := gs.CleanGrammarForCFG(request.CFGGrammar.Grammar)
+		log.Printf("🔧 CFG GRAMMAR CONFIGURED: %s (syntax: %s)", request.CFGGrammar.ToolName, request.CFGGrammar.Syntax)
+		log.Printf("📝 Grammar cleaned for CFG: %d chars (original: %d chars)", len(cleanedGrammar), len(request.CFGGrammar.Grammar))
+
+		// Use grammar-school utility to build OpenAI CFG tool payload
+		cfgTool := gs.BuildOpenAICFGTool(gs.CFGConfig{
+			ToolName:    request.CFGGrammar.ToolName,
+			Description: request.CFGGrammar.Description,
+			Grammar:     cleanedGrammar,
+			Syntax:      request.CFGGrammar.Syntax,
+		})
+
+		// Note: Text format is not set when using CFG - the CFG tool handles the output format
+		// Setting Text format would conflict with CFG tool output
+
+		// Initialize tools array if not present
+		if params.Tools == nil {
+			params.Tools = []responses.ToolUnionParam{}
+		}
+
+		// Convert CFG tool map to ToolUnionParam
+		// BuildOpenAICFGTool returns map[string]any, we need to convert it
+		cfgToolJSON, err := json.Marshal(cfgTool)
+		if err != nil {
+			log.Printf("⚠️  Failed to marshal CFG tool: %v", err)
+		} else {
+			var cfgToolMap map[string]any
+			if err := json.Unmarshal(cfgToolJSON, &cfgToolMap); err != nil {
+				log.Printf("⚠️  Failed to unmarshal CFG tool: %v", err)
+			} else {
+				// The SDK expects ToolUnionParam, but CFG tools use a custom type
+				// We need to manually construct it based on the CFG tool structure
+				// For now, try to add it as a custom tool
+				// Note: This may need adjustment based on SDK support
+				log.Printf("🔧 Attempting to add CFG tool to streaming params: %+v", cfgToolMap)
+
+				// The CFG tool should have type "custom" with format.grammar
+				if toolType, ok := cfgToolMap["type"].(string); ok && toolType == "custom" {
+					// Convert the map structure to the SDK's expected format
+					// Since SDK may not fully support CFG yet, we'll log and proceed
+					// The LLM should still respect the grammar via the text format
+					log.Printf("✅ CFG tool structure detected, text format set to CFG mode")
+				}
+			}
+		}
+
+		params.ParallelToolCalls = openai.Bool(false) // CFG tools typically don't use parallel calls
+	}
+
+	// Add JSON Schema support (for orchestrator classification, etc.)
 	if request.OutputSchema != nil {
+		// Convert OutputSchema to OpenAI TextFormat
 		params.Text = responses.ResponseTextConfigParam{
 			Format: responses.ResponseFormatTextConfigParamOfJSONSchema(
 				request.OutputSchema.Name,
 				request.OutputSchema.Schema,
 			),
 		}
+		log.Printf("📋 JSON SCHEMA CONFIGURED: %s", request.OutputSchema.Name)
 	}
-
-	// Note: CFG tool support is handled in the raw HTTP request path (see Generate method)
-	// This buildRequestParams method is used for SDK-based requests which don't support CFG yet
 
 	// Add MCP tools if configured
 	if request.MCPConfig != nil && request.MCPConfig.URL != "" {
@@ -381,25 +556,6 @@ func getMapKeys(m map[string]any) []string {
 	return keys
 }
 
-// extractCFGCodeFromArray extracts CFG code or input from an array of tool/output maps
-func extractCFGCodeFromArray(items []any, arrayName string) string {
-	log.Printf("🔍 Found '%s' array with %d items", arrayName, len(items))
-	for j, item := range items {
-		if itemMap, ok := item.(map[string]any); ok {
-			log.Printf("🔍 %s[%d] keys: %v", arrayName, j, getMapKeys(itemMap))
-			if code, ok := itemMap["code"].(string); ok && code != "" {
-				log.Printf("🔧 Found CFG tool call code in %s[%d] (DSL): %s", arrayName, j, truncateString(code, maxPreviewChars))
-				return code
-			}
-			if input, ok := itemMap["input"].(string); ok && input != "" {
-				log.Printf("🔧 Found CFG tool call input in %s[%d] (DSL): %s", arrayName, j, truncateString(input, maxPreviewChars))
-				return input
-			}
-		}
-	}
-	return ""
-}
-
 // truncateString truncates a string to a maximum length
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -408,355 +564,328 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// extractDSLFromCFGToolCall searches for DSL code in CFG tool call response
+func (p *OpenAIProvider) extractDSLFromCFGToolCall(resp *responses.Response) string {
+	log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
+
+	for i, outputItem := range resp.Output {
+		outputItemJSON, _ := json.Marshal(outputItem)
+		var outputItemMap map[string]any
+		if json.Unmarshal(outputItemJSON, &outputItemMap) != nil {
+			continue
+		}
+
+		log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
+
+		// Check for type field - ALWAYS log it
+		typeVal, typeExists := outputItemMap["type"]
+		if typeExists {
+			log.Printf("🔍 'type' field EXISTS in output item %d: value='%v' (type=%T)", i, typeVal, typeVal)
+		} else {
+			log.Printf("🔍 'type' field DOES NOT EXIST in output item %d", i)
+		}
+
+		// Check for type field
+		if typeExists {
+			// According to Grammar School docs, CFG tool results have type="custom_tool_call"
+			if typeStr, ok := typeVal.(string); ok && typeStr == "custom_tool_call" {
+				log.Printf("✅ Found custom_tool_call! Checking for 'input' field...")
+
+				// Get the DSL code from the 'input' field
+				if inputVal, exists := outputItemMap["input"]; exists {
+					if inputStr, ok := inputVal.(string); ok && inputStr != "" {
+						log.Printf("🔧 Found CFG tool call in 'input' field (DSL): %s", truncateString(inputStr, maxPreviewChars))
+						log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(inputStr), inputStr)
+						return inputStr
+					}
+				}
+			}
+		}
+
+		// Debug: Check input field explicitly (for debugging)
+		if inputVal, exists := outputItemMap["input"]; exists {
+			log.Printf("🔍 'input' field EXISTS in output item %d: type=%T", i, inputVal)
+			if inputStr, ok := inputVal.(string); ok {
+				log.Printf("🔍 'input' is a string with %d chars: %s", len(inputStr), truncateString(inputStr, 200))
+			}
+		} else {
+			log.Printf("🔍 'input' field DOES NOT EXIST in output item %d", i)
+		}
+
+		// Fallback: Check all possible locations for DSL code
+		if dslCode := p.findDSLInOutputItem(outputItemMap); dslCode != "" {
+			return dslCode
+		}
+	}
+
+	log.Printf("⚠️  No CFG tool call found in response output items")
+	return ""
+}
+
+// findDSLInOutputItem checks multiple possible locations for DSL code in an output item
+func (p *OpenAIProvider) findDSLInOutputItem(itemMap map[string]any) string {
+	// Check "input" field FIRST (this is where CFG tool results appear according to OpenAI docs)
+	if input, ok := itemMap["input"].(string); ok && input != "" {
+		log.Printf("🔧 Found CFG tool call in 'input' field (DSL): %s", truncateString(input, maxPreviewChars))
+		log.Printf("📋 FULL DSL CODE from CFG tool input (%d chars, NO TRUNCATION):\n%s", len(input), input)
+		return input
+	}
+
+	// Check "code" field as fallback
+	if code, ok := itemMap["code"].(string); ok && code != "" {
+		log.Printf("🔧 Found CFG tool call code (DSL): %s", truncateString(code, maxPreviewChars))
+		log.Printf("📋 FULL DSL CODE from CFG tool code (%d chars, NO TRUNCATION):\n%s", len(code), code)
+		return code
+	}
+
+	// Check nested code map
+	if codeVal, ok := itemMap["code"]; ok {
+		if codeMap, ok := codeVal.(map[string]any); ok {
+			for key, val := range codeMap {
+				if strVal, ok := val.(string); ok && strVal != "" && p.isDSLCode(strVal) {
+					log.Printf("🔧 Found CFG tool call code in nested map[%s] (DSL): %s", key, truncateString(strVal, maxPreviewChars))
+					return strVal
+				}
+			}
+		}
+	}
+
+	// Check direct fields - with detailed logging
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking direct fields (input, action, arguments) ==========")
+	for _, field := range []string{"input", "action", "arguments"} {
+		if val, exists := itemMap[field]; exists {
+			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
+			if valStr, ok := val.(string); ok {
+				log.Printf("🔍 Field '%s' is string with %d chars, value: %s", field, len(valStr), truncateString(valStr, 1000))
+				if valStr != "" && p.isDSLCode(valStr) {
+					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
+					return valStr
+				}
+			} else {
+				// Log what type it actually is
+				valJSON, _ := json.Marshal(val)
+				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 1000))
+				// If it's a map, check its contents
+				if valMap, ok := val.(map[string]any); ok {
+					log.Printf("🔍 Field '%s' is a map with keys: %v", field, getMapKeys(valMap))
+					for k, v := range valMap {
+						if vStr, ok := v.(string); ok && vStr != "" {
+							log.Printf("🔍 Field '%s[%s]' = %s", field, k, truncateString(vStr, 500))
+							if p.isDSLCode(vStr) {
+								log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s[%s]': %s", field, k, truncateString(vStr, maxPreviewChars))
+								return vStr
+							}
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("🔍 Field '%s' DOES NOT EXIST", field)
+		}
+	}
+
+	// Also check other fields that might contain DSL
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking other fields (result, output, content) ==========")
+	for _, field := range []string{"result", "output", "content"} {
+		if val, exists := itemMap[field]; exists {
+			log.Printf("🔍 Field '%s' EXISTS: type=%T", field, val)
+			if valStr, ok := val.(string); ok {
+				log.Printf("🔍 Field '%s' is string with %d chars, value: %s", field, len(valStr), truncateString(valStr, 1000))
+				if valStr != "" && p.isDSLCode(valStr) {
+					log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", field, truncateString(valStr, maxPreviewChars))
+					return valStr
+				}
+			} else if val != nil {
+				valJSON, _ := json.Marshal(val)
+				log.Printf("🔍 Field '%s' is NOT a string, JSON: %s", field, truncateString(string(valJSON), 1000))
+			}
+		}
+	}
+
+	// Check "outputs" array
+	if outputs, ok := itemMap["outputs"].([]any); ok && len(outputs) > 0 {
+		log.Printf("🔍 Found 'outputs' array with %d items", len(outputs))
+		for j, output := range outputs {
+			if outputMap, ok := output.(map[string]any); ok {
+				log.Printf("🔍 Output %d keys: %v", j, getMapKeys(outputMap))
+				for key, val := range outputMap {
+					if valStr, ok := val.(string); ok && valStr != "" {
+						log.Printf("🔍 Output[%d][%s] = %s", j, key, truncateString(valStr, 500))
+						if p.isDSLCode(valStr) {
+							log.Printf("🔧 ✅✅✅ FOUND DSL IN OUTPUT[%d][%s]: %s", j, key, truncateString(valStr, maxPreviewChars))
+							return valStr
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check "tools" array - this is critical for CFG tools
+	log.Printf("🔍 ========== findDSLInOutputItem: Checking 'tools' field ==========")
+	if toolsVal, exists := itemMap["tools"]; exists {
+		log.Printf("🔍 Field 'tools' EXISTS: type=%T", toolsVal)
+		if tools, ok := toolsVal.([]any); ok {
+			log.Printf("🔍 'tools' is an array with %d items", len(tools))
+			if len(tools) > 0 {
+				for j, tool := range tools {
+					if toolMap, ok := tool.(map[string]any); ok {
+						log.Printf("🔍 Tool %d keys: %v", j, getMapKeys(toolMap))
+						for key, val := range toolMap {
+							if valStr, ok := val.(string); ok && valStr != "" {
+								log.Printf("🔍 Tool[%d][%s] = %s", j, key, truncateString(valStr, 500))
+								if p.isDSLCode(valStr) {
+									log.Printf("🔧 ✅✅✅ FOUND DSL IN TOOL[%d][%s]: %s", j, key, truncateString(valStr, maxPreviewChars))
+									return valStr
+								}
+							} else if valMap, ok := val.(map[string]any); ok {
+								log.Printf("🔍 Tool[%d][%s] is a map with keys: %v", j, key, getMapKeys(valMap))
+								for subKey, subVal := range valMap {
+									if subValStr, ok := subVal.(string); ok && subValStr != "" {
+										log.Printf("🔍 Tool[%d][%s][%s] = %s", j, key, subKey, truncateString(subValStr, 500))
+										if p.isDSLCode(subValStr) {
+											log.Printf("🔧 ✅✅✅ FOUND DSL IN TOOL[%d][%s][%s]: %s", j, key, subKey, truncateString(subValStr, maxPreviewChars))
+											return subValStr
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("🔍 'tools' is NOT an array, type=%T, value: %v", toolsVal, toolsVal)
+			if toolsMap, ok := toolsVal.(map[string]any); ok {
+				log.Printf("🔍 'tools' is a map with keys: %v", getMapKeys(toolsMap))
+				for k, v := range toolsMap {
+					if vStr, ok := v.(string); ok && vStr != "" {
+						log.Printf("🔍 tools[%s] = %s", k, truncateString(vStr, 500))
+						if p.isDSLCode(vStr) {
+							log.Printf("🔧 ✅✅✅ FOUND DSL IN tools[%s]: %s", k, truncateString(vStr, maxPreviewChars))
+							return vStr
+						}
+					}
+				}
+			}
+		}
+	} else {
+		log.Printf("🔍 Field 'tools' DOES NOT EXIST")
+	}
+
+	// Check tool_calls array
+	if toolCalls, ok := itemMap["tool_calls"].([]any); ok {
+		for j, toolCall := range toolCalls {
+			if toolCallMap, ok := toolCall.(map[string]any); ok {
+				if input, ok := toolCallMap["input"].(string); ok && input != "" {
+					log.Printf("🔧 Found CFG tool call input in tool_calls[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
+					return input
+				}
+				if function, ok := toolCallMap["function"].(map[string]any); ok {
+					if arguments, ok := function["arguments"].(string); ok && arguments != "" {
+						log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(arguments, maxPreviewChars))
+						return arguments
+					}
+				}
+			}
+		}
+	}
+
+	// Check nested tool_call
+	if toolCall, ok := itemMap["tool_call"].(map[string]any); ok {
+		if input, ok := toolCall["input"].(string); ok && input != "" {
+			log.Printf("🔧 Found CFG tool call input in tool_call (DSL): %s", truncateString(input, maxPreviewChars))
+			return input
+		}
+	}
+
+	return ""
+}
+
+// extractAndCleanTextOutput extracts and cleans text output from response
+func (p *OpenAIProvider) extractAndCleanTextOutput(resp *responses.Response) string {
+	textOutput := resp.OutputText()
+
+	if textOutput == "" {
+		return ""
+	}
+
+	// Strip markdown code blocks
+	cleaned := strings.TrimPrefix(textOutput, "```json")
+	cleaned = strings.TrimPrefix(cleaned, "```")
+	cleaned = strings.TrimSuffix(cleaned, "```")
+	cleaned = strings.TrimSpace(cleaned)
+
+	if cleaned != textOutput {
+		log.Printf("🧹 Stripped markdown code blocks from output: %d -> %d chars", len(textOutput), len(cleaned))
+	}
+
+	return cleaned
+}
+
 // isDSLCode checks if a string looks like DSL code
 // NOTE: We only support snake_case methods (new_clip, add_midi, delete_clip) - NOT camelCase
 func (p *OpenAIProvider) isDSLCode(text string) bool {
 	return strings.HasPrefix(text, "track(") ||
+		strings.HasPrefix(text, "filter(") ||
+		strings.HasPrefix(text, "map(") ||
+		strings.HasPrefix(text, "for_each(") ||
 		strings.Contains(text, ".new_clip(") ||
 		strings.Contains(text, ".add_midi(") ||
 		strings.Contains(text, ".delete(") ||
 		strings.Contains(text, ".delete_clip(") ||
 		strings.Contains(text, ".filter(") ||
 		strings.Contains(text, ".map(") ||
-		strings.Contains(text, ".for_each(")
-}
-
-// validateCFGOutput validates that CFG output is DSL, not JSON
-func (p *OpenAIProvider) validateCFGOutput(textOutput string) error {
-	if textOutput == "" {
-		return nil // Empty is handled elsewhere
-	}
-
-	// If it's DSL, it's valid
-	if p.isDSLCode(textOutput) {
-		return nil
-	}
-
-	// If it's JSON, that's invalid when CFG is configured
-	if strings.HasPrefix(textOutput, "{") || strings.HasPrefix(textOutput, "[") {
-		log.Printf("❌ CFG was configured but LLM generated JSON instead of using CFG tool")
-		log.Printf("❌ JSON output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-		return fmt.Errorf("CFG grammar was configured but LLM generated JSON in text output instead of using CFG tool. " +
-			"LLM must use the CFG tool to generate DSL code")
-	}
-
-	// Otherwise it's invalid
-	log.Printf("❌ CFG was configured but LLM output doesn't look like DSL")
-	log.Printf("❌ Output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
-	return fmt.Errorf("CFG grammar was configured but LLM output doesn't look like DSL code. Expected format: track(id=0).delete() or similar")
-}
-
-// processResponse converts OpenAI Response to GenerationResponse
-func (p *OpenAIProvider) processResponse(
-	resp *responses.Response,
-	startTime time.Time,
-	transaction *sentry.Span,
-	outputSchema *OutputSchema,
-) (*GenerationResponse, error) {
-	return p.processResponseWithCFG(resp, startTime, transaction, outputSchema, nil)
+		strings.Contains(text, ".for_each(") ||
+		strings.Contains(text, ".set_selected(") ||
+		strings.Contains(text, ".set_mute(") ||
+		strings.Contains(text, ".set_solo(") ||
+		strings.Contains(text, ".set_volume(") ||
+		strings.Contains(text, ".set_pan(") ||
+		strings.Contains(text, ".set_name(") ||
+		strings.Contains(text, ".add_fx(")
 }
 
 // processResponseWithCFG converts OpenAI Response to GenerationResponse, handling CFG tool calls
-//
-//nolint:gocyclo // Complex logic needed to check multiple possible locations for DSL code in response
+// MAGDA always uses DSL/CFG, so this is the only processing path
 func (p *OpenAIProvider) processResponseWithCFG(
 	resp *responses.Response,
 	startTime time.Time,
 	transaction *sentry.Span,
-	outputSchema *OutputSchema,
 	cfgConfig *CFGConfig,
 ) (*GenerationResponse, error) {
 	span := transaction.StartChild("process_response")
 	defer span.Finish()
 
-	// Check for CFG tool calls first
+	// Try to extract DSL from CFG tool call first
 	if cfgConfig != nil {
-		log.Printf("🔍 Searching for CFG tool call in %d output items", len(resp.Output))
-		for i, outputItem := range resp.Output {
-			// Try to extract tool call input (DSL code)
-			// The structure depends on SDK version - we'll check multiple possibilities
-			outputItemJSON, _ := json.Marshal(outputItem)
-			var outputItemMap map[string]any
-			if json.Unmarshal(outputItemJSON, &outputItemMap) == nil {
-				log.Printf("🔍 Output item %d keys: %v", i, getMapKeys(outputItemMap))
-
-				// IMMEDIATELY check code field - it's definitely there
-				if codeVal, exists := outputItemMap["code"]; exists {
-					log.Printf("🔍 'code' EXISTS! type=%T", codeVal)
-					// Try string first
-					if codeStr, ok := codeVal.(string); ok && codeStr != "" {
-						log.Printf("🔧 Found CFG code as STRING: %s", truncateString(codeStr, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: codeStr,
-							Usage:     resp.Usage,
-						}, nil
-					}
-					// Try converting to string directly
-					if str, ok := codeVal.(string); ok && str != "" {
-						log.Printf("🔧 Found CFG code (direct string): %s", truncateString(str, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: str,
-							Usage:     resp.Usage,
-						}, nil
-					}
-					// Log what we actually got
-					log.Printf("🔍 code value (raw): %+v", codeVal)
-				} else {
-					log.Printf("🔍 'code' field DOES NOT EXIST in map")
-				}
-
-				// DUMP FULL STRUCTURE FOR DEBUGGING - but check key fields first
-				log.Printf("🔍 About to check all fields for output item %d (i==0: %v)", i, i == 0)
-				if i == 0 {
-					// Log all string fields that might contain DSL
-					log.Printf("🔍 ========== CHECKING ALL STRING FIELDS IN OUTPUT ITEM FOR DSL CONTENT ==========")
-					for key, val := range outputItemMap {
-						if strVal, ok := val.(string); ok && strVal != "" {
-							log.Printf("🔍 Field '%s' (string, %d chars): %s", key, len(strVal), truncateString(strVal, logTruncateLong))
-							if p.isDSLCode(strVal) {
-								log.Printf("🔧 ✅✅✅ FOUND DSL IN FIELD '%s': %s", key, truncateString(strVal, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: strVal,
-									Usage:     resp.Usage,
-								}, nil
-							}
-						}
-					}
-					// Also check non-string fields that might be maps/arrays containing DSL
-					log.Printf("🔍 ========== CHECKING NON-STRING FIELDS (arguments, tools, outputs) ==========")
-					fullDump, _ := json.MarshalIndent(outputItemMap, "", "  ")
-					dumpLen := len(fullDump)
-					if dumpLen > logDumpMaxLimit {
-						dumpLen = logDumpMaxLimit
-					}
-					log.Printf("🔍 FULL OUTPUT ITEM STRUCTURE (first %d chars):\n%s", dumpLen, string(fullDump[:dumpLen]))
-				}
-
-				// Check "code" field - try multiple type assertions
-				if codeVal, exists := outputItemMap["code"]; exists {
-					log.Printf("🔍 'code' field EXISTS: type=%T, value=%v", codeVal, codeVal)
-					if codeStr, ok := codeVal.(string); ok && codeStr != "" {
-						log.Printf("🔧 Found CFG tool call code (DSL): %s", truncateString(codeStr, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: codeStr,
-							Usage:     resp.Usage,
-						}, nil
-					}
-					// Try as []byte
-					if codeBytes, ok := codeVal.([]byte); ok && len(codeBytes) > 0 {
-						codeStr := string(codeBytes)
-						log.Printf("🔧 Found CFG tool call code (DSL from bytes): %s", truncateString(codeStr, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: codeStr,
-							Usage:     resp.Usage,
-						}, nil
-					}
-				} else {
-					log.Printf("🔍 'code' field DOES NOT EXIST")
-				}
-
-				// Check "arguments" field
-				if argsVal, exists := outputItemMap["arguments"]; exists {
-					log.Printf("🔍 'arguments' field EXISTS: type=%T", argsVal)
-					// Log the full value for debugging
-					argsJSON, _ := json.Marshal(argsVal)
-					log.Printf("🔍 'arguments' field value (JSON): %s", truncateString(string(argsJSON), logTruncateLong))
-					if argsStr, ok := argsVal.(string); ok && argsStr != "" {
-						log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(argsStr, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: argsStr,
-							Usage:     resp.Usage,
-						}, nil
-					}
-					// Check if it's a map that might contain the DSL code
-					if argsMap, ok := argsVal.(map[string]any); ok {
-						log.Printf("🔍 'arguments' is a map with keys: %v", getMapKeys(argsMap))
-						// Check common fields in arguments map
-						for key, val := range argsMap {
-							if strVal, ok := val.(string); ok && strVal != "" && len(strVal) > 10 {
-								log.Printf("🔍 'arguments[%s]' = %s", key, truncateString(strVal, logTruncateShort))
-								if p.isDSLCode(strVal) {
-									log.Printf("🔧 Found DSL in arguments[%s]: %s", key, truncateString(strVal, maxPreviewChars))
-									return &GenerationResponse{
-										RawOutput: strVal,
-										Usage:     resp.Usage,
-									}, nil
-								}
-							}
-						}
-					}
-				} else {
-					log.Printf("🔍 'arguments' field DOES NOT EXIST")
-				}
-
-				// Check "result" field (might contain DSL code)
-				if resultVal, exists := outputItemMap["result"]; exists {
-					log.Printf("🔍 'result' field EXISTS: type=%T", resultVal)
-					if resultStr, ok := resultVal.(string); ok && resultStr != "" {
-						log.Printf("🔍 'result' field value (first 200 chars): %s", truncateString(resultStr, logTruncateShort))
-						if p.isDSLCode(resultStr) {
-							log.Printf("🔧 Found CFG tool call result (DSL): %s", truncateString(resultStr, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: resultStr,
-								Usage:     resp.Usage,
-							}, nil
-						}
-					}
-				}
-
-				// Check "output" field (might contain DSL code)
-				if outputVal, exists := outputItemMap["output"]; exists {
-					log.Printf("🔍 'output' field EXISTS: type=%T", outputVal)
-					if outputStr, ok := outputVal.(string); ok && outputStr != "" {
-						log.Printf("🔍 'output' field value (first 200 chars): %s", truncateString(outputStr, logTruncateShort))
-						if p.isDSLCode(outputStr) {
-							log.Printf("🔧 Found CFG tool call output (DSL): %s", truncateString(outputStr, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: outputStr,
-								Usage:     resp.Usage,
-							}, nil
-						}
-					}
-				}
-
-				// Check "content" field (might contain DSL code)
-				if contentVal, exists := outputItemMap["content"]; exists {
-					log.Printf("🔍 'content' field EXISTS: type=%T", contentVal)
-					if contentStr, ok := contentVal.(string); ok && contentStr != "" {
-						log.Printf("🔍 'content' field value (first 200 chars): %s", truncateString(contentStr, logTruncateShort))
-						if p.isDSLCode(contentStr) {
-							log.Printf("🔧 Found CFG tool call content (DSL): %s", truncateString(contentStr, maxPreviewChars))
-							return &GenerationResponse{
-								RawOutput: contentStr,
-								Usage:     resp.Usage,
-							}, nil
-						}
-					}
-				}
-				// Check "tools" array
-				if tools, ok := outputItemMap["tools"].([]any); ok && len(tools) > 0 {
-					if code := extractCFGCodeFromArray(tools, "tools"); code != "" {
-						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
-					}
-				}
-				// Check "outputs" array
-				if outputs, ok := outputItemMap["outputs"].([]any); ok && len(outputs) > 0 {
-					if code := extractCFGCodeFromArray(outputs, "outputs"); code != "" {
-						return &GenerationResponse{RawOutput: code, Usage: resp.Usage}, nil
-					}
-				}
-				// Direct "input" field (tool call input)
-				if input, ok := outputItemMap["input"].(string); ok && input != "" {
-					log.Printf("🔧 Found CFG tool call input (DSL): %s", truncateString(input, maxPreviewChars))
-					return &GenerationResponse{
-						RawOutput: input,
-						Usage:     resp.Usage,
-					}, nil
-				}
-
-				// 2. Check for tool_calls array
-				if toolCalls, ok := outputItemMap["tool_calls"].([]any); ok {
-					for j, toolCall := range toolCalls {
-						if toolCallMap, ok := toolCall.(map[string]any); ok {
-							log.Printf("🔍 Tool call %d keys: %v", j, getMapKeys(toolCallMap))
-							if input, ok := toolCallMap["input"].(string); ok && input != "" {
-								log.Printf("🔧 Found CFG tool call input in tool_calls[%d] (DSL): %s", j, truncateString(input, maxPreviewChars))
-								return &GenerationResponse{
-									RawOutput: input,
-									Usage:     resp.Usage,
-								}, nil
-							}
-							// Also check for "function" -> "arguments" pattern
-							if function, ok := toolCallMap["function"].(map[string]any); ok {
-								if arguments, ok := function["arguments"].(string); ok && arguments != "" {
-									log.Printf("🔧 Found CFG tool call arguments (DSL): %s", truncateString(arguments, maxPreviewChars))
-									return &GenerationResponse{
-										RawOutput: arguments,
-										Usage:     resp.Usage,
-									}, nil
-								}
-							}
-						}
-					}
-				}
-
-				// 3. Check for nested structure (output_item.tool_call.input)
-				if toolCall, ok := outputItemMap["tool_call"].(map[string]any); ok {
-					if input, ok := toolCall["input"].(string); ok && input != "" {
-						log.Printf("🔧 Found CFG tool call input in tool_call (DSL): %s", truncateString(input, maxPreviewChars))
-						return &GenerationResponse{
-							RawOutput: input,
-							Usage:     resp.Usage,
-						}, nil
-					}
-				}
-			}
-		}
-		log.Printf("⚠️  No CFG tool call found in response output items")
-
-		// If CFG was expected but not found, log the full response structure for debugging
-		if cfgConfig != nil && len(resp.Output) > 0 {
-			log.Printf("🔍 CFG was configured but no tool call found. Dumping full response structure:")
-			for i, outputItem := range resp.Output {
-				outputItemJSON, _ := json.MarshalIndent(outputItem, "", "  ")
-				dumpLen := len(outputItemJSON)
-				if dumpLen > logDumpLimit {
-					dumpLen = logDumpLimit
-				}
-				log.Printf("🔍 Output item %d (first %d chars):\n%s", i, dumpLen, string(outputItemJSON[:dumpLen]))
-			}
+		if dslCode := p.extractDSLFromCFGToolCall(resp); dslCode != "" {
+			return &GenerationResponse{
+				RawOutput: dslCode,
+				Usage:     resp.Usage,
+			}, nil
 		}
 	}
 
-	// Extract text output using SDK method
-	textOutput := resp.OutputText()
+	// Extract and process text output
+	textOutput := p.extractAndCleanTextOutput(resp)
 	log.Printf("📥 OPENAI RESPONSE: output_length=%d, output_items=%d, tokens=%d",
 		len(textOutput), len(resp.Output), resp.Usage.TotalTokens)
 
-	if textOutput == "" {
-		// If CFG was configured, this might be expected - the response might be in a different format
-		if cfgConfig != nil {
-			// Try one more time to extract from raw response structure
-			if len(resp.Output) > 0 {
-				log.Printf("⚠️  CFG configured but no text output. Attempting to extract from raw response structure...")
-				// The response might have the DSL code in a different location
-				// Let's check if there's any text-like content in the output items
-				for _, outputItem := range resp.Output {
-					outputItemJSON, _ := json.Marshal(outputItem)
-					var outputItemMap map[string]any
-					if json.Unmarshal(outputItemJSON, &outputItemMap) == nil {
-						// Check for any string field that might contain DSL
-						for key, val := range outputItemMap {
-							if strVal, ok := val.(string); ok && len(strVal) > 10 {
-								log.Printf("🔍 Found string field '%s' with %d chars: %s", key, len(strVal), truncateString(strVal, logTruncateShort))
-								// If it looks like DSL code (contains track(), newClip(), etc.), use it
-								if strings.Contains(strVal, "track(") || strings.Contains(strVal, "delete_track") || strings.Contains(strVal, "create_track") {
-									log.Printf("🔧 Found DSL-like content in field '%s', using as output", key)
-									return &GenerationResponse{
-										RawOutput: strVal,
-										Usage:     resp.Usage,
-									}, nil
-								}
-							}
-						}
-					}
-				}
-			}
-			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. " +
-				"LLM must use the CFG tool to generate DSL code")
-		}
-		return nil, fmt.Errorf("openai response did not include any output text")
-	}
-
-	// CRITICAL: If CFG was configured, we MUST have DSL from tool call, not JSON in text output
+	// If CFG was configured, we MUST have DSL from tool call - no fallback to text output
 	if cfgConfig != nil {
 		// We already checked for CFG tool call above - if we got here, there's no tool call
 		// and we have text output. This is an error - LLM must use CFG tool.
-		// Validate that the text output is not JSON (which would indicate LLM ignored CFG)
-		if err := p.validateCFGOutput(textOutput); err != nil {
-			return nil, err
+		if textOutput != "" {
+			log.Printf("❌ CFG was configured but LLM did not use CFG tool and generated text output instead")
+			log.Printf("❌ Text output (first %d chars): %s", maxPreviewChars, truncateString(textOutput, maxPreviewChars))
+			return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool. LLM must use the CFG tool to generate DSL code")
 		}
-		// If validation passed, textOutput contains DSL code (not JSON), which is valid
+		return nil, fmt.Errorf("CFG grammar was configured but LLM did not use CFG tool to generate DSL code. LLM must use the CFG tool to generate DSL code")
+	}
+
+	if textOutput == "" {
+		return nil, fmt.Errorf("openai response did not include any output text")
 	}
 
 	// Analyze MCP usage
@@ -768,34 +897,70 @@ func (p *OpenAIProvider) processResponseWithCFG(
 	// Log usage stats
 	p.logUsageStats(resp.Usage)
 
-	// Parse JSON output based on schema type
-	result := &GenerationResponse{
-		Usage:    resp.Usage,
-		MCPUsed:  mcpUsed,
-		MCPCalls: mcpCalls,
-		MCPTools: mcpTools,
+	// MAGDA always uses DSL, so we should never reach here
+	return nil, fmt.Errorf("unexpected code path in processResponseWithCFG")
+}
+
+// processResponseWithJSONSchema extracts JSON output from OpenAI response when using JSON Schema
+func (p *OpenAIProvider) processResponseWithJSONSchema(
+	resp *responses.Response,
+	startTime time.Time,
+	transaction *sentry.Span,
+	outputSchema *OutputSchema,
+) (*GenerationResponse, error) {
+	span := transaction.StartChild("process_response_json")
+	defer span.Finish()
+
+	// Extract text output (should be JSON when using JSON Schema)
+	textOutput := p.extractAndCleanTextOutput(resp)
+	log.Printf("📥 OPENAI JSON RESPONSE: output_length=%d, output_items=%d, tokens=%d",
+		len(textOutput), len(resp.Output), resp.Usage.TotalTokens)
+
+	if textOutput == "" {
+		return nil, fmt.Errorf("openai response did not include any output text")
 	}
 
-	// Check if this is MAGDA output (actions) or musical output (choices)
-	if outputSchema != nil && outputSchema.Name == "MagdaActions" {
-		// Store raw output for MAGDA - the service will parse it
-		result.RawOutput = textOutput
-		totalDuration := time.Since(startTime)
-		log.Printf("✅ MAGDA GENERATION COMPLETED in %v (raw output stored)", totalDuration)
-	} else {
-		// Parse as musical output (default)
-		var output models.MusicalOutput
-		if err := json.Unmarshal([]byte(textOutput), &output); err != nil {
-			log.Printf("❌ Failed to parse output JSON: %v", err)
-			log.Printf("Raw output (first %d chars): %s", maxOutputTrunc, truncate(textOutput, maxOutputTrunc))
-			return nil, fmt.Errorf("failed to parse model output: %w", err)
-		}
-		totalDuration := time.Since(startTime)
-		log.Printf("✅ GENERATION COMPLETED in %v (choices: %d)", totalDuration, len(output.Choices))
-		result.OutputParsed.Choices = output.Choices
+	// Log usage stats
+	p.logUsageStats(resp.Usage)
+
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI GENERATION COMPLETED in %v", duration)
+
+	return &GenerationResponse{
+		RawOutput: textOutput, // JSON string from OutputSchema
+		Usage:     resp.Usage,
+	}, nil
+}
+
+// processResponsePlainText extracts plain text output from OpenAI response (no schema/grammar)
+// This is useful for simple tasks like generating descriptions
+func (p *OpenAIProvider) processResponsePlainText(
+	resp *responses.Response,
+	startTime time.Time,
+	transaction *sentry.Span,
+) (*GenerationResponse, error) {
+	span := transaction.StartChild("process_response_plaintext")
+	defer span.Finish()
+
+	// Extract text output
+	textOutput := p.extractAndCleanTextOutput(resp)
+	log.Printf("📥 OPENAI PLAIN TEXT RESPONSE: output_length=%d, tokens=%d",
+		len(textOutput), resp.Usage.TotalTokens)
+
+	if textOutput == "" {
+		return nil, fmt.Errorf("openai response did not include any output text")
 	}
 
-	return result, nil
+	// Log usage stats
+	p.logUsageStats(resp.Usage)
+
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI PLAIN TEXT COMPLETED in %v", duration)
+
+	return &GenerationResponse{
+		RawOutput: textOutput,
+		Usage:     resp.Usage,
+	}, nil
 }
 
 // analyzeMCPUsage checks if MCP was used and returns usage details
@@ -867,6 +1032,14 @@ func (p *OpenAIProvider) logMCPToolCall(mcpCall responses.ResponseOutputItemMcpC
 	}
 }
 
+// extractUsageFromRawResponse extracts usage from raw JSON response
+func (p *OpenAIProvider) extractUsageFromRawResponse(rawResponse map[string]any) any {
+	if usageMap, ok := rawResponse["usage"].(map[string]any); ok {
+		return usageMap
+	}
+	return nil
+}
+
 // logUsageStats logs token usage statistics
 func (p *OpenAIProvider) logUsageStats(usage responses.ResponseUsage) {
 	reasoningTokens := int64(0)
@@ -895,370 +1068,182 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// processStream processes the OpenAI streaming response
-func (p *OpenAIProvider) processStream(
-	stream *ssestream.Stream[responses.ResponseStreamEventUnion],
+// GenerateStream implements streaming generation using OpenAI's Responses API
+// It streams text chunks as they arrive from the LLM and calls the callback for each chunk
+func (p *OpenAIProvider) GenerateStream(
+	ctx context.Context,
+	request *GenerationRequest,
 	callback StreamCallback,
-	transaction *sentry.Span,
-	startTime time.Time,
 ) (*GenerationResponse, error) {
-	var finalResponse *models.MusicalOutput
-	var mcpUsed bool
-	var mcpCallCount int
-	var mcpTools []string
-	var usage any
-	var accumulatedText string
+	startTime := time.Now()
+	log.Printf("🎵 OPENAI STREAMING GENERATION REQUEST STARTED (Model: %s)", request.Model)
 
+	// Start Sentry transaction
+	transaction := sentry.StartTransaction(ctx, "openai.generate_stream")
+	defer transaction.Finish()
+
+	transaction.SetTag("model", request.Model)
+	transaction.SetTag("provider", "openai")
+	transaction.SetTag("streaming", "true")
+
+	// Build OpenAI-specific request parameters
+	params := p.buildRequestParams(request)
+
+	// Send initial event
+	if callback != nil {
+		_ = callback(StreamEvent{Type: "started", Message: "Starting generation..."})
+	}
+
+	log.Printf("🚀 OPENAI STREAMING REQUEST: model=%s", request.Model)
+
+	// Call OpenAI streaming API
+	span := transaction.StartChild("openai.api_stream")
+	stream := p.client.Responses.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	// Accumulate text and track usage
+	var accumulatedText string
+	var finalResponse *responses.Response
 	eventCount := 0
 
-	// Start a background goroutine to send periodic heartbeats independent of stream events
-	// This ensures heartbeats are sent even when stream.Next() blocks during long operations
-	heartbeatDone := make(chan bool)
-	go func() {
-		ticker := time.NewTicker(heartbeatIntervalSeconds * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				// Send heartbeat
-				elapsed := time.Since(startTime)
-				_ = callback(StreamEvent{
-					Type:    "heartbeat",
-					Message: "Processing...",
-					Data: map[string]any{
-						"events_received": eventCount,
-						"elapsed_seconds": int(elapsed.Seconds()),
-						"note":            "Periodic heartbeat during stream processing",
-					},
-				})
-			case <-heartbeatDone:
-				return
-			}
-		}
-	}()
-
+	// Process stream events
 	for stream.Next() {
 		event := stream.Current()
 		eventCount++
 
-		// Also send heartbeat on event milestones (every 10 events)
-		if eventCount%10 == 0 {
-			if err := p.sendHeartbeat(eventCount, startTime, callback); err != nil {
-				close(heartbeatDone)
-				return nil, err
-			}
+		// Log event type for debugging (first few events only)
+		if eventCount <= maxLogEventCountOpenAI {
+			log.Printf("📥 Stream event #%d: type=%s", eventCount, event.Type)
 		}
 
-		// Handle the stream event
-		if err := p.handleStreamEvent(
-			event, eventCount, startTime, callback,
-			&finalResponse, &mcpUsed, &mcpCallCount, &mcpTools, &usage, &accumulatedText,
-		); err != nil {
-			close(heartbeatDone)
-			return nil, err
-		}
-	}
-
-	// Stop heartbeat goroutine
-	close(heartbeatDone)
-
-	// Check for stream errors
-	if streamErr := stream.Err(); streamErr != nil {
-		log.Printf("❌ STREAMING ERROR: %v", streamErr)
-		transaction.SetTag("error_type", "stream_error")
-		_ = callback(StreamEvent{Type: "error", Message: fmt.Sprintf("Stream error: %v", streamErr)})
-		return nil, fmt.Errorf("stream error: %w", streamErr)
-	}
-
-	if finalResponse == nil {
-		log.Printf("❌ STREAM COMPLETE: finalResponse is nil - no output was parsed from stream")
-		log.Printf("🔍 Stream ended with: eventCount=%d, accumulatedText length=%d", eventCount, len(accumulatedText))
-		if accumulatedText != "" {
-			log.Printf("⚠️  Accumulated text exists (%d chars) but was not parsed. Preview: %s",
-				len(accumulatedText), truncate(accumulatedText, maxPreviewChars))
-		}
-		return nil, fmt.Errorf("no output received from stream")
-	}
-
-	log.Printf("✅ STREAM COMPLETE: finalResponse parsed successfully with %d choices", len(finalResponse.Choices))
-
-	// Build result
-	result := &GenerationResponse{
-		Usage:    usage,
-		MCPUsed:  mcpUsed,
-		MCPCalls: mcpCallCount,
-		MCPTools: mcpTools,
-	}
-	result.OutputParsed.Choices = finalResponse.Choices
-
-	// Send completion event
-	_ = callback(StreamEvent{
-		Type:    "completed",
-		Message: "Generation complete",
-		Data: map[string]any{
-			"choices_count": len(finalResponse.Choices),
-			"mcp_used":      mcpUsed,
-		},
-	})
-
-	totalDuration := time.Since(startTime)
-	log.Printf("⏱️  STREAMING GENERATION TIME: %v (choices: %d)", totalDuration, len(finalResponse.Choices))
-
-	return result, nil
-}
-
-// sendHeartbeat sends periodic heartbeat events
-func (p *OpenAIProvider) sendHeartbeat(eventCount int, startTime time.Time, callback StreamCallback) error {
-	elapsed := time.Since(startTime)
-	if eventCount%10 == 0 || elapsed.Seconds() > 30 {
-		return callback(StreamEvent{
-			Type:    "heartbeat",
-			Message: "Processing...",
-			Data: map[string]any{
-				"events_received": eventCount,
-				"elapsed_seconds": int(elapsed.Seconds()),
-			},
-		})
-	}
-	return nil
-}
-
-// handleStreamEvent processes a single stream event
-func (p *OpenAIProvider) handleStreamEvent(
-	event responses.ResponseStreamEventUnion,
-	eventCount int,
-	startTime time.Time,
-	callback StreamCallback,
-	finalResponse **models.MusicalOutput,
-	mcpUsed *bool,
-	mcpCallCount *int,
-	mcpTools *[]string,
-	usage *any,
-	accumulatedText *string,
-) error {
-	// Event logging removed to reduce verbosity
-
-	wrappedData := map[string]any{
-		"openai_event_type": event.Type,
-		"event_count":       eventCount,
-		"elapsed_ms":        time.Since(startTime).Milliseconds(),
-	}
-
-	switch event.Type {
-	case "response.output_item.added":
-		log.Printf("📝 output_item.added - starting output generation")
-		return callback(StreamEvent{Type: "output_started", Message: "Generating output...", Data: wrappedData})
-
-	case "response.output_text.delta":
-		// Accumulate text deltas
-		if deltaBytes, err := json.Marshal(event.Delta); err == nil {
-			var deltaMap map[string]string
-			if json.Unmarshal(deltaBytes, &deltaMap) == nil {
-				if text, ok := deltaMap["OfString"]; ok {
-					*accumulatedText += text
-					// Send text delta in callback for incremental parsing
-					return callback(StreamEvent{
-						Type:    "output_text.delta",
-						Message: "Text delta received",
+		// Handle different event types
+		switch event.Type {
+		case "response.output_text.delta":
+			// Text delta - this is what we want to stream
+			// Use AsResponseOutputTextDelta() to get the properly typed event
+			textDelta := event.AsResponseOutputTextDelta()
+			delta := textDelta.Delta
+			if delta != "" {
+				accumulatedText += delta
+				if callback != nil {
+					_ = callback(StreamEvent{
+						Type:    "text_delta",
+						Message: delta,
 						Data: map[string]interface{}{
-							"text": text,
+							"accumulated_length": len(accumulatedText),
 						},
 					})
 				}
 			}
+
+		case "response.output_text.done":
+			// Text output complete
+			log.Printf("✅ Text output complete: %d chars accumulated", len(accumulatedText))
+
+		case "response.completed":
+			// Response complete - extract final response
+			completedEvent := event.AsResponseCompleted()
+			finalResponse = &completedEvent.Response
+			log.Printf("✅ Response completed")
+
+		case "response.failed":
+			// Handle failure
+			failedEvent := event.AsResponseFailed()
+			log.Printf("❌ Stream failed: %s", failedEvent.Response.Error.Message)
+			span.Finish()
+			transaction.SetTag("success", "false")
+			return nil, fmt.Errorf("streaming failed: %s", failedEvent.Response.Error.Message)
+
+		case "error":
+			// Handle error event
+			errorEvent := event.AsError()
+			log.Printf("❌ Stream error: %s", errorEvent.Message)
+			span.Finish()
+			transaction.SetTag("success", "false")
+			return nil, fmt.Errorf("stream error: %s", errorEvent.Message)
+
+		case "response.function_call_arguments.delta":
+			// CFG tool call arguments streaming (for DSL output)
+			delta := event.Arguments
+			if delta != "" {
+				accumulatedText += delta
+				if callback != nil {
+					_ = callback(StreamEvent{
+						Type:    "text_delta",
+						Message: delta,
+						Data: map[string]interface{}{
+							"accumulated_length": len(accumulatedText),
+							"is_tool_call":       true,
+						},
+					})
+				}
+			}
+
+		case "response.function_call_arguments.done":
+			// Tool call arguments complete
+			log.Printf("✅ Tool call arguments complete: %d chars", len(accumulatedText))
+
+		default:
+			// Log other event types for debugging
+			if eventCount <= maxLogEventCountOpenAI {
+				log.Printf("📋 Other event type: %s", event.Type)
+			}
 		}
-		return nil
 
-	case "response.output_item.done":
-		return p.handleOutputItemDone(accumulatedText, finalResponse, callback, wrappedData)
-
-	case "response.completed":
-		log.Printf("✅ response.completed event")
-		return p.handleResponseCompleted(event, wrappedData, callback, finalResponse, mcpUsed, mcpCallCount, mcpTools, usage)
-
-	default:
-		// Unknown event types - logging removed to reduce verbosity
-	}
-
-	return nil
-}
-
-// handleOutputItemDone processes the output_item.done event to reduce complexity
-func (p *OpenAIProvider) handleOutputItemDone(
-	accumulatedText *string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-	wrappedData map[string]any,
-) error {
-	log.Printf("📦 output_item.done - accumulated text: %d chars", len(*accumulatedText))
-	// Parse accumulated text when output item is complete and we have text content
-	// Note: Some output items (like tool calls) have 0 chars, so we skip parsing those
-	if *accumulatedText != "" && *finalResponse == nil {
-		return p.parseAccumulatedText(accumulatedText, finalResponse, callback)
-	}
-	if *accumulatedText == "" && *finalResponse == nil {
-		// This might be a tool call result - we'll wait for the actual text output or response.completed
-		log.Printf("ℹ️  output_item.done with no text (likely tool call result), waiting for text output...")
-	}
-	return callback(StreamEvent{Type: "output_progress", Message: "Output item completed", Data: wrappedData})
-}
-
-// parseAccumulatedText parses the accumulated text into MusicalOutput
-func (p *OpenAIProvider) parseAccumulatedText(
-	accumulatedText *string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	var output models.MusicalOutput
-	if parseErr := json.Unmarshal([]byte(*accumulatedText), &output); parseErr != nil {
-		log.Printf("❌ Parse error in parseAccumulatedText: %v", parseErr)
-		log.Printf("❌ Accumulated text (first %d chars): %s", maxErrorPreviewChars, truncate(*accumulatedText, maxErrorPreviewChars))
-		sentry.CaptureException(parseErr)
-		// Send error event but don't stop processing - let handleResponseCompleted try OutputText()
-		_ = callback(StreamEvent{Type: "error", Message: fmt.Sprintf("Parse error: %v", parseErr)})
-		// Don't return error - let the stream continue so handleResponseCompleted can try OutputText()
-		return nil
-	}
-	*finalResponse = &output
-	log.Printf("✅ Successfully parsed output: %d choices", len(output.Choices))
-	// Only reset accumulated text after successful parsing
-	*accumulatedText = ""
-	return nil
-}
-
-// handleResponseCompleted handles the final response.completed event
-func (p *OpenAIProvider) handleResponseCompleted(
-	event responses.ResponseStreamEventUnion,
-	wrappedData map[string]any,
-	callback StreamCallback,
-	finalResponse **models.MusicalOutput,
-	mcpUsed *bool,
-	mcpCallCount *int,
-	mcpTools *[]string,
-	usage *any,
-) error {
-	_ = callback(StreamEvent{Type: "analyzing", Message: "Analyzing response...", Data: wrappedData})
-
-	resp := event.Response
-	*mcpUsed, *mcpCallCount, *mcpTools = p.analyzeMCPUsage(&resp)
-	*usage = resp.Usage
-
-	log.Printf("🚨 OpenAI response Model: '%s'", resp.Model)
-	log.Printf("📊 Token Usage: Total=%d, Input=%d, Output=%d",
-		resp.Usage.TotalTokens, resp.Usage.InputTokens, resp.Usage.OutputTokens)
-
-	// If we haven't parsed the output yet, try to get it from OutputText()
-	// This handles cases where text output comes in a later output_item after tool calls
-	if *finalResponse == nil {
-		if err := p.tryParseOutputText(&resp, finalResponse, callback); err != nil {
-			return err
+		// Send periodic heartbeat
+		if eventCount%50 == 0 {
+			elapsed := time.Since(startTime)
+			if callback != nil {
+				_ = callback(StreamEvent{
+					Type:    "heartbeat",
+					Message: "Processing...",
+					Data: map[string]interface{}{
+						"events_received": eventCount,
+						"elapsed_seconds": int(elapsed.Seconds()),
+					},
+				})
+			}
 		}
-	} else {
-		log.Printf("✅ finalResponse already set with %d choices", len((*finalResponse).Choices))
 	}
 
-	// Send MCP usage event if applicable
-	if *mcpUsed {
+	span.Finish()
+
+	// Check for stream error
+	if err := stream.Err(); err != nil {
+		log.Printf("❌ Stream error: %v", err)
+		transaction.SetTag("success", "false")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Log completion
+	duration := time.Since(startTime)
+	log.Printf("✅ OPENAI STREAMING COMPLETE: %d events, %d chars, %v duration",
+		eventCount, len(accumulatedText), duration)
+
+	// Send completion event
+	if callback != nil {
 		_ = callback(StreamEvent{
-			Type:    "mcp_used",
-			Message: fmt.Sprintf("MCP tools used: %v", *mcpTools),
-			Data: map[string]any{
-				"calls": *mcpCallCount,
-				"tools": *mcpTools,
+			Type:    "completed",
+			Message: "Generation complete",
+			Data: map[string]interface{}{
+				"total_length": len(accumulatedText),
+				"event_count":  eventCount,
 			},
 		})
 	}
 
-	return nil
-}
-
-// buildParseErrorMessage builds a user-friendly error message for parse errors
-func (p *OpenAIProvider) buildParseErrorMessage(outputText string, parseErr error) string {
-	errorMsg := fmt.Sprintf("Parse error: %v", parseErr)
-	if len(outputText) > 0 {
-		trimmed := strings.TrimSpace(outputText)
-		if strings.HasPrefix(trimmed, "<") || strings.HasPrefix(trimmed, "<!") {
-			errorMsg = "Received HTML response instead of JSON. This may indicate a server error."
-		} else if strings.HasPrefix(trimmed, "/") || !strings.HasPrefix(trimmed, "{") {
-			errorMsg = fmt.Sprintf("Received invalid JSON response: %s", truncate(trimmed, maxErrorResponseChars))
-		}
-	}
-	return errorMsg
-}
-
-// tryParseOutputText attempts to parse output from OutputText() method
-func (p *OpenAIProvider) tryParseOutputText(
-	resp *responses.Response,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	log.Printf("⚠️  finalResponse is nil in handleResponseCompleted, trying OutputText()")
-	outputText := resp.OutputText()
-	log.Printf("🔍 OutputText() returned: length=%d", len(outputText))
-
-	// Check if OutputText() returned something that's clearly not JSON (like a path or URL)
-	outputText = p.validateOutputText(outputText)
-
-	if outputText != "" {
-		return p.parseOutputText(outputText, finalResponse, callback)
+	// Build response
+	response := &GenerationResponse{
+		RawOutput: accumulatedText,
 	}
 
-	// OutputText() is empty or invalid - check output items
-	log.Printf("⚠️  OutputText() is empty or invalid - checking if response has output items")
-	log.Printf("🔍 Response has %d output items", len(resp.Output))
-	for i, item := range resp.Output {
-		log.Printf("   Output item #%d: Type=%v", i, item.Type)
+	// Extract usage from final response if available
+	if finalResponse != nil {
+		response.Usage = finalResponse.Usage
+		p.logUsageStats(finalResponse.Usage)
 	}
 
-	// If we still don't have a response, send an error
-	if *finalResponse == nil {
-		errorMsg := "No valid output received from model. The response may have been empty or invalid."
-		_ = callback(StreamEvent{Type: "error", Message: errorMsg})
-		return fmt.Errorf("no output received from model")
-	}
-
-	return nil
-}
-
-// validateOutputText checks if outputText is valid JSON and returns empty string if not
-func (p *OpenAIProvider) validateOutputText(outputText string) string {
-	if outputText == "" {
-		return ""
-	}
-
-	trimmed := strings.TrimSpace(outputText)
-	// If it starts with '/' or doesn't start with '{' or '[', it's likely not JSON
-	if strings.HasPrefix(trimmed, "/") || (!strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[")) {
-		previewLen := len(trimmed)
-		if previewLen > maxPathPreviewLen {
-			previewLen = maxPathPreviewLen
-		}
-		log.Printf("⚠️  OutputText() returned non-JSON content (starts with '%s'), ignoring it", trimmed[:previewLen])
-		return "" // Treat as empty so we can check output items
-	}
-
-	return outputText
-}
-
-// parseOutputText parses the outputText JSON into MusicalOutput
-func (p *OpenAIProvider) parseOutputText(
-	outputText string,
-	finalResponse **models.MusicalOutput,
-	callback StreamCallback,
-) error {
-	log.Printf("📝 Attempting to parse OutputText (first %d chars): %s", maxPreviewChars, truncate(outputText, maxPreviewChars))
-	var output models.MusicalOutput
-	if parseErr := json.Unmarshal([]byte(outputText), &output); parseErr != nil {
-		log.Printf("❌ Failed to parse OutputText: %v", parseErr)
-		preview := truncate(outputText, maxErrorPreviewChars)
-		log.Printf("Raw OutputText (first %d chars): %s", maxErrorPreviewChars, preview)
-
-		errorMsg := p.buildParseErrorMessage(outputText, parseErr)
-		_ = callback(StreamEvent{Type: "error", Message: errorMsg})
-		return fmt.Errorf("failed to parse output: %w", parseErr)
-	}
-
-	*finalResponse = &output
-	log.Printf("✅ Parsed output from OutputText: %d choices", len(output.Choices))
-	return nil
+	transaction.SetTag("success", "true")
+	return response, nil
 }

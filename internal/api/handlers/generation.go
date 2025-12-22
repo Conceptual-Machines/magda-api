@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	magdaarranger "github.com/Conceptual-Machines/magda-agents-go/agents/arranger"
-	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
+	magdaarranger "github.com/Conceptual-Machines/magda-api/internal/agents/arranger"
+	magdaconfig "github.com/Conceptual-Machines/magda-api/internal/agents/config"
 	"github.com/Conceptual-Machines/magda-api/internal/api/middleware"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
@@ -134,7 +134,7 @@ func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest,
 		reasoningMode = defaultReasoningMode
 	}
 
-	// Note: Using magda-agents-go GenerationService which uses OpenAI provider from config
+	// Note: Using internal/agents GenerationService which uses OpenAI provider from config
 	// Provider selection is not currently supported
 
 	// Create a service with the selected provider
@@ -144,7 +144,7 @@ func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest,
 	}
 	genService := magdaarranger.NewGenerationService(magdaCfg)
 
-	// Note: magda-agents-go GenerationService doesn't support outputFormat parameter
+	// Note: internal/agents GenerationService doesn't support outputFormat parameter
 	// It always uses JSON Schema output format
 	result, err := genService.Generate(c.Request.Context(), model, req.InputArray, reasoningMode)
 	if err != nil {
@@ -291,11 +291,11 @@ func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, 
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
-	// Note: magda-agents-go GenerationService always uses JSON Schema output format
+	// Note: internal/agents GenerationService always uses JSON Schema output format
 	// outputFormat parameter is ignored
 
 	// Stream events and capture result
-	// Note: magda-agents-go GenerationService doesn't support outputFormat parameter
+	// Note: internal/agents GenerationService doesn't support outputFormat parameter
 	result, err := genService.GenerateStream(
 		c.Request.Context(), model, req.InputArray, reasoningMode,
 		func(event magdaarranger.StreamEvent) error {

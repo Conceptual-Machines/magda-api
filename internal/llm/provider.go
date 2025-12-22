@@ -66,6 +66,10 @@ type GenerationResponse struct {
 	MCPTools  []string `json:"mcpTools,omitempty"`
 }
 
+// StreamingProvider is an alias for Provider for backward compatibility
+// In magda-api, all providers support streaming through the main Provider interface
+type StreamingProvider = Provider
+
 // StreamCallback is called for each streaming event
 type StreamCallback func(event StreamEvent) error
 

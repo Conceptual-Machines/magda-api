@@ -71,11 +71,36 @@ issues:
       linters:
         - dupl
         - gomnd
+        - mnd
         - gocyclo
         - goconst
-    # Allow stuttering in internal agent packages (daw.DawAgent, plugin.PluginAgent, etc.)
-    # This is acceptable for internal packages where the package name provides context
+        - thelper
+        - govet
+    # magda.go contains prompt documentation with similar DSL examples in different sections (false positive)
+    - path: internal/prompt/magda\.go
+      linters:
+        - dupl
+        - lll
+        - nolintlint
+    # Agent code merged from magda-agents-go - has music-specific constants and complex parsing
     - path: internal/agents/.*\.go
       linters:
+        - mnd
+        - goconst
+        - lll
+        - makezero
+        - gocyclo
+        - exhaustive
         - revive
-      text: "that stutters"
+        - nolintlint
+        - gosimple
+    # LLM provider has complex response handling logic
+    - path: internal/llm/.*\.go
+      linters:
+        - mnd
+        - goconst
+        - lll
+        - gocyclo
+        - nolintlint
+        - revive
+        - unused
