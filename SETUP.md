@@ -83,18 +83,6 @@ go test -v ./internal/api/handlers -run TestMagda
 ./tests/smoke/run-all.sh http://localhost:8080
 ```
 
-## Local Development with Local Dependencies
-
-To use local copies of `magda-agents-go`:
-
-```bash
-# Enable local mode (uses ../magda-agents-go)
-./scripts/local-dev.sh
-
-# Switch back to git dependencies
-./scripts/ci-dev.sh
-```
-
 ## Code Style
 
 - Use `gofmt` and `goimports` for formatting

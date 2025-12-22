@@ -15,9 +15,7 @@ This test compares the performance of DSL (CFG grammar) vs JSON Schema output fo
 
 ```bash
 # Set environment variables
-export AIDEAS_API_URL="http://localhost:8080"  # or your API URL
-export AIDEAS_EMAIL="your@email.com"
-export AIDEAS_PASSWORD="your-password"
+export MAGDA_API_URL="http://localhost:8080"  # or your API URL
 
 # Run the test
 python3 evals/test_dsl_vs_json.py
