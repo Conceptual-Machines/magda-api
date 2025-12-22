@@ -16,7 +16,7 @@ type MixHandler struct {
 }
 
 func NewMixHandler(cfg *config.Config) *MixHandler {
-	// Convert aideas-api config to magda-agents config
+	// Convert magda-api config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
 		MCPServerURL: cfg.MCPServerURL,

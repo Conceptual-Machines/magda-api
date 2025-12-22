@@ -38,7 +38,7 @@ type PluginAlias = magdaplugin.PluginAlias
 type Preferences = magdaplugin.Preferences
 
 func NewMagdaHandler(cfg *config.Config) *MagdaHandler {
-	// Convert aideas-api config to magda-agents config
+	// Convert magda-api config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
 		MCPServerURL: cfg.MCPServerURL,

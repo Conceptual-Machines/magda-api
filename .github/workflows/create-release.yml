@@ -34,16 +34,16 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: aideas-api
+          SENTRY_PROJECT: magda-api
         with:
           environment: production
-          version: aideas-api@${{ steps.version.outputs.version }}
+          version: magda-api@${{ steps.version.outputs.version }}
           set_commits: auto
 
       - name: Success message
         run: |
           echo "✅ Sentry release created successfully!"
-          echo "📦 Version: aideas-api@${{ steps.version.outputs.version }}"
+          echo "📦 Version: magda-api@${{ steps.version.outputs.version }}"
           echo ""
           echo "🔍 View in Sentry:"
-          echo "https://sentry.io/organizations/${{ secrets.SENTRY_ORG }}/projects/aideas-api/releases/aideas-api@${{ steps.version.outputs.version }}/"
+          echo "https://sentry.io/organizations/${{ secrets.SENTRY_ORG }}/projects/magda-api/releases/magda-api@${{ steps.version.outputs.version }}/"

@@ -13,20 +13,6 @@ jobs:
     name: CI (Docker)
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: aideas_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,9 +26,8 @@ jobs:
 
       - name: Build and Test in Docker
         run: |
-          docker build --target build -t aideas-api:build -f Dockerfile.ci .
-          docker build --target test -t aideas-api:test -f Dockerfile.ci . \
-            --build-arg DATABASE_URL="postgres://postgres:testpass@172.17.0.1:5432/aideas_test?sslmode=disable"
+          docker build --target build -t magda-api:build -f Dockerfile.ci .
+          docker build --target test -t magda-api:test -f Dockerfile.ci .
 
       - name: Extract artifacts
         run: |
@@ -50,12 +35,12 @@ jobs:
           mkdir -p bin
 
           # Extract binary
-          docker create --name build-container aideas-api:build
-          docker cp build-container:/app/bin/aideas-api ./bin/aideas-api
+          docker create --name build-container magda-api:build
+          docker cp build-container:/app/bin/magda-api ./bin/magda-api
           docker rm build-container
 
           # Extract test results and coverage
-          docker create --name test-container aideas-api:test
+          docker create --name test-container magda-api:test
           docker cp test-container:/app/coverage.out ./coverage.out
           docker cp test-container:/app/coverage.html ./coverage.html
           docker cp test-container:/app/test-output.log ./test-output.log
@@ -73,8 +58,8 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aideas-api-binary
-          path: bin/aideas-api
+          name: magda-api-binary
+          path: bin/magda-api
           retention-days: 30
 
       - name: Upload test artifacts
