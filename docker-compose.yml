@@ -8,7 +8,6 @@ services:
     environment:
       - ENVIRONMENT=development
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - AUTH_MODE=none # No auth required for local/self-hosted
     volumes:
       - ./data:/app/data:ro

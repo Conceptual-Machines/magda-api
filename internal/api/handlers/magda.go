@@ -41,7 +41,6 @@ func NewMagdaHandler(cfg *config.Config) *MagdaHandler {
 	// Convert aideas-api config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
-		GeminiAPIKey: cfg.GeminiAPIKey,
 		MCPServerURL: cfg.MCPServerURL,
 	}
 

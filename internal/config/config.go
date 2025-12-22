@@ -12,7 +12,6 @@ type Config struct {
 
 	// LLM API Keys
 	OpenAIAPIKey string // OpenAI API key for GPT models
-	GeminiAPIKey string // Google Gemini API key
 
 	// MCP Server (optional)
 	MCPServerURL string
@@ -35,7 +34,6 @@ func Load() *Config {
 		Environment:       getEnv("ENVIRONMENT", "development"),
 		Port:              getEnv("PORT", "8080"),
 		OpenAIAPIKey:      getEnv("OPENAI_API_KEY", ""),
-		GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
 		MCPServerURL:      getEnv("MCP_SERVER_URL", ""),
 		SentryDSN:         getEnv("SENTRY_DSN", ""),
 		LangfusePublicKey: getEnv("LANGFUSE_PUBLIC_KEY", ""),

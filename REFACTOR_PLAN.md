@@ -55,7 +55,7 @@ magda-api/
 │   │       ├── sentry.go
 │   │       ├── gateway.go     # Trust X-User-* headers
 │   │       └── noauth.go      # Pass-through for self-hosted
-│   ├── llm/                   # LLM providers (OpenAI, Gemini)
+│   ├── llm/                   # LLM providers (OpenAI)
 │   ├── models/                # Request/response models
 │   ├── observability/         # Langfuse integration
 │   ├── prompt/                # Prompt builders

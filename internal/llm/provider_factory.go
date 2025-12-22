@@ -6,43 +6,21 @@ import (
 	"strings"
 )
 
-// ProviderFactory creates providers based on model name or explicit provider choice
+// ProviderFactory creates providers based on model name
 type ProviderFactory struct {
 	openaiAPIKey string
-	geminiAPIKey string
 }
 
 // NewProviderFactory creates a new provider factory
-func NewProviderFactory(openaiAPIKey, geminiAPIKey string) *ProviderFactory {
+func NewProviderFactory(openaiAPIKey string) *ProviderFactory {
 	return &ProviderFactory{
 		openaiAPIKey: openaiAPIKey,
-		geminiAPIKey: geminiAPIKey,
 	}
 }
 
-// GetProvider returns the appropriate provider for the given model/provider name
-func (f *ProviderFactory) GetProvider(ctx context.Context, model, providerName string) (Provider, error) {
-	// If provider is explicitly specified, use that
-	if providerName != "" {
-		return f.getProviderByName(ctx, providerName)
-	}
-
-	// Otherwise, infer from model name
+// GetProvider returns the appropriate provider for the given model
+func (f *ProviderFactory) GetProvider(ctx context.Context, model string) (Provider, error) {
 	return f.getProviderByModel(ctx, model)
-}
-
-// getProviderByName creates a provider by explicit name
-func (f *ProviderFactory) getProviderByName(_ context.Context, providerName string) (Provider, error) {
-	switch strings.ToLower(providerName) {
-	case "openai":
-		if f.openaiAPIKey == "" {
-			return nil, fmt.Errorf("openai API key not configured")
-		}
-		return NewOpenAIProvider(f.openaiAPIKey), nil
-
-	default:
-		return nil, fmt.Errorf("unknown provider: %s (allowed: openai)", providerName)
-	}
 }
 
 // getProviderByModel infers provider from model name

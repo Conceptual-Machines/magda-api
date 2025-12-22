@@ -30,7 +30,6 @@ func NewGenerationHandler(cfg *config.Config) *GenerationHandler {
 	// Convert config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
-		GeminiAPIKey: cfg.GeminiAPIKey,
 		MCPServerURL: cfg.MCPServerURL,
 	}
 	baseService := magdaarranger.NewGenerationService(magdaCfg)
@@ -42,8 +41,7 @@ func NewGenerationHandler(cfg *config.Config) *GenerationHandler {
 }
 
 type GenerateRequest struct {
-	Model string `json:"model"` // Model to use (e.g., gpt-5-mini, gpt-4o)
-	// Optional: provider override (openai, gemini) - defaults to provider based on model
+	Model        string                   `json:"model"` // Model to use (e.g., gpt-5-mini, gpt-5-nano)
 	Provider     string                   `json:"provider"`
 	InputArray   []map[string]interface{} `json:"input_array" binding:"required"`
 	Stream       bool                     `json:"stream"`        // Enable streaming
@@ -77,18 +75,14 @@ func (h *GenerationHandler) Generate(c *gin.Context) {
 		model = defaultModel
 	}
 
-	// Validate model - support OpenAI GPT-5 and Google Gemini models
+	// Validate model - support OpenAI GPT-5 models
 	allowedModels := map[string]bool{
-		// OpenAI GPT-5 models
 		"gpt-5-mini": true,
 		"gpt-5-nano": true,
-		// Google Gemini 2.5 models (latest)
-		"gemini-2.5-flash": true,
-		"gemini-2.5-pro":   true,
 	}
 	if !allowedModels[model] {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid model. Allowed: gpt-5-mini, gpt-5-nano, gemini-2.5-flash, gemini-2.5-pro",
+			"error": "Invalid model. Allowed: gpt-5-mini, gpt-5-nano",
 		})
 		return
 	}
@@ -146,7 +140,6 @@ func (h *GenerationHandler) generateOneShot(c *gin.Context, req GenerateRequest,
 	// Create a service with the selected provider
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: h.cfg.OpenAIAPIKey,
-		GeminiAPIKey: h.cfg.GeminiAPIKey,
 		MCPServerURL: h.cfg.MCPServerURL,
 	}
 	genService := magdaarranger.NewGenerationService(magdaCfg)
@@ -288,7 +281,6 @@ func (h *GenerationHandler) generateStream(c *gin.Context, req GenerateRequest, 
 	// Create a service (uses default OpenAI provider from config)
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: h.cfg.OpenAIAPIKey,
-		GeminiAPIKey: h.cfg.GeminiAPIKey,
 		MCPServerURL: h.cfg.MCPServerURL,
 	}
 	genService := magdaarranger.NewGenerationService(magdaCfg)
