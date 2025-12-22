@@ -1,4 +1,4 @@
-.PHONY: run build test clean install dev lint fmt tidy check ci
+.PHONY: run build test clean install dev lint fmt tidy check ci smoke-test
 
 # Default target
 all: tidy fmt check build
@@ -9,11 +9,11 @@ dev:
 
 # Build
 build:
-	go build -o bin/aideas-api main.go
+	go build -o bin/magda-api main.go
 
 # Run
 run: build
-	./bin/aideas-api
+	./bin/magda-api
 
 # Test
 test:
@@ -22,6 +22,10 @@ test:
 # Test with coverage report
 test-coverage: test
 	go tool cover -html=coverage.out -o coverage.html
+
+# Smoke tests (requires server running)
+smoke-test:
+	./tests/smoke/run-all.sh http://localhost:8080
 
 # Format code
 fmt:
@@ -67,20 +71,20 @@ docker-build:
 	docker build -t magda-api:latest .
 
 docker-run:
-	docker run -p 8080:8080 --env-file .env aideas-api:latest
+	docker run -p 8080:8080 --env-file .env magda-api:latest
 
 # Docker Compose
 dc-up:
-	docker-compose up -d
+	docker compose up -d
 
 dc-down:
-	docker-compose down
+	docker compose down
 
 dc-logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 dc-rebuild:
-	docker-compose up --build -d
+	docker compose up --build -d
 
 # Development setup
 setup: install-tools install tidy fmt

@@ -8,26 +8,22 @@ import (
 	magdaconfig "github.com/Conceptual-Machines/magda-agents-go/config"
 	"github.com/Conceptual-Machines/magda-api/internal/config"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type MixHandler struct {
 	agent *mixagent.MixAnalysisAgent
-	db    *gorm.DB
 	cfg   *config.Config
 }
 
-func NewMixHandler(cfg *config.Config, db *gorm.DB) *MixHandler {
-	// Convert aideas-api config to magda-agents config
+func NewMixHandler(cfg *config.Config) *MixHandler {
+	// Convert magda-api config to magda-agents config
 	magdaCfg := &magdaconfig.Config{
 		OpenAIAPIKey: cfg.OpenAIAPIKey,
-		GeminiAPIKey: cfg.GeminiAPIKey,
 		MCPServerURL: cfg.MCPServerURL,
 	}
 
 	return &MixHandler{
 		agent: mixagent.NewMixAnalysisAgent(magdaCfg),
-		db:    db,
 		cfg:   cfg,
 	}
 }

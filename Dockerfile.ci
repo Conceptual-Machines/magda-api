@@ -32,7 +32,7 @@ RUN go test -v -race -coverprofile=coverage.out $(go list ./... | grep -v /handl
 
 # Final stage: Export artifacts
 FROM scratch AS export
-COPY --from=build /app/bin/aideas-api /aideas-api
+COPY --from=build /app/bin/magda-api /magda-api
 COPY --from=test /app/coverage.out /coverage.out
 COPY --from=test /app/coverage.html /coverage.html
 COPY --from=test /app/test-output.log /test-output.log

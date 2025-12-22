@@ -6,7 +6,7 @@ import (
 	"github.com/Conceptual-Machines/magda-api/internal/models"
 )
 
-// Provider defines the interface for LLM providers (OpenAI, Gemini, etc.)
+// Provider defines the interface for LLM providers
 // All providers MUST support structured output (JSON Schema) for reliable response parsing
 type Provider interface {
 	// Generate creates a musical composition using the LLM with structured output

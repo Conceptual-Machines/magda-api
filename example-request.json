@@ -1,8 +1,0 @@
-{
-  "input_array": [
-    {
-      "role": "user",
-      "content": "{\"user_prompt\": \"Generate a simple C major chord progression with 4 chords\"}"
-    }
-  ]
-}

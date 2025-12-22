@@ -1,22 +1,6 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=aideas_api
-      - POSTGRES_USER=aideas_user
-      - POSTGRES_PASSWORD=aideas_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aideas_user -d aideas_api"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   magda-api:
     build: .
     ports:
@@ -24,15 +8,9 @@ services:
     environment:
       - ENVIRONMENT=development
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - MCP_SERVER_URL=
-      - DATABASE_URL=postgres://aideas_user:aideas_password@postgres:5432/aideas_api?sslmode=disable
-      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-change-in-production}
+      - AUTH_MODE=none # No auth required for local/self-hosted
     volumes:
       - ./data:/app/data:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -47,7 +25,4 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-
-volumes:
-  postgres_data:
+      start_period: 10s

@@ -31,7 +31,7 @@ func setupDrummerTestRouter() *gin.Engine {
 	router.Use(gin.Recovery())
 
 	// Drummer endpoint (without auth for testing)
-	drummerHandler := NewDrummerHandler(cfg, nil)
+	drummerHandler := NewDrummerHandler(cfg)
 	router.POST("/api/v1/drummer/generate", drummerHandler.Generate)
 
 	return router

@@ -7,7 +7,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/lucaromagnoli/aideas-api
+    local-prefixes: github.com/Conceptual-Machines/magda-api
   govet:
     check-shadowing: true
   gocyclo:
