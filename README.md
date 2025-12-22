@@ -4,16 +4,19 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Conceptual-Machines/magda-api)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Stateless Go API for **MAGDA** (**M**ulti-**A**gent **G**enerative **D**AW **A**utomation) - AI-powered music production assistant for REAPER.
+Stateless Go API for **MAGDA** (**M**ulti-**A**gent **G**enerative **D**AW **A**utomation) - AI-powered music production assistant.
 
 ## Overview
 
-MAGDA API provides AI agents for:
-- 🎹 **DAW Control** - Natural language commands for REAPER
-- 🎸 **JSFX Generation** - AI-assisted audio effect creation
+MAGDA API provides AI agents for music production across multiple DAWs:
+
+- 🎹 **DAW Control** - Natural language commands for your DAW
+- 🎸 **JSFX Generation** - AI-assisted audio effect creation (REAPER)
 - 🥁 **Drum Pattern Generation** - Intelligent drum programming
 - 🎚️ **Mix Analysis** - AI-powered mixing suggestions
 - 🎵 **Music Arrangement** - Chord progressions and melodies
+
+Currently supports **REAPER**, with **Ableton Live** support planned.
 
 ## Architecture
 

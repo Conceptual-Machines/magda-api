@@ -1,10 +1,10 @@
-# AIDEAS OpenAI Evals
+# MAGDA OpenAI Evals
 
 Evaluation framework for one-shot generation mode using OpenAI's Evals framework.
 
 ## Architecture
 
-This evaluation suite calls the deployed AIDEAS API and analyzes the musical output using custom scorers.
+This evaluation suite calls the deployed MAGDA API and analyzes the musical output using custom scorers.
 
 ### Evaluation Criteria
 
@@ -43,54 +43,26 @@ pip install -r requirements.txt
 
 ## Authentication
 
-The API requires authentication. Set your credentials:
+For local development with `AUTH_MODE=none`, no credentials are needed.
+
+For hosted environments, set your API URL:
 
 ```bash
-# Option 1: Use .env file in project root (recommended)
-# Add to magda-api/.env:
-AIDEAS_EMAIL=your@email.com
-AIDEAS_PASSWORD=yourpassword
-
-# Option 2: Export environment variables
-export AIDEAS_EMAIL=your@email.com
-export AIDEAS_PASSWORD=yourpassword
-
-# Option 3: Pass as command-line arguments
-python test_spread.py --email your@email.com --password yourpassword
+export MAGDA_API_URL=http://localhost:8080
 ```
 
 ## Usage
 
-### Quick Test Script (Recommended)
-
-Use the convenience script that automatically loads credentials from `.env` or `.envrc`:
-
-```bash
-# Test spread parameter only
-./run_tests.sh spread
-
-# Run full evaluation suite
-./run_tests.sh eval
-
-# Run both spread test and full eval
-./run_tests.sh both
-
-# Test against different API URL
-AIDEAS_API_URL=http://localhost:8080 ./run_tests.sh spread
-```
-
-### Manual Usage
-
 ```bash
 # Test spread parameter
-python test_spread.py --api-url https://api.musicalaideas.com
+python test_spread.py --api-url http://localhost:8080
 
-# Run full evals (both modes)
+# Run full evals
 cd openai_evals
-python run_eval.py --mode both --api-url https://api.musicalaideas.com
+python run_eval.py --mode both --api-url http://localhost:8080
 
 # Run only one-shot mode
-python run_eval.py --mode one_shot --api-url https://api.musicalaideas.com
+python run_eval.py --mode one_shot --api-url http://localhost:8080
 ```
 
 ## How It Works

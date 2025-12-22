@@ -57,7 +57,7 @@ go test -v ./internal/api/handlers -run TestMagdaChat
 | `/api/v1/jsfx/generate/stream` | POST | JSFX streaming |
 | `/api/v1/drummer/generate` | POST | Drum pattern generation |
 | `/api/v1/mix/analyze` | POST | Mix analysis |
-| `/api/v1/aideas/generations` | POST | Music arrangement |
+| `/api/v1/generations` | POST | Music arrangement (Arranger agent) |
 
 ## Example Requests
 
