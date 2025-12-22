@@ -1,5 +1,9 @@
 # MAGDA API
 
+[![CI](https://github.com/Conceptual-Machines/magda-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Conceptual-Machines/magda-api/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Conceptual-Machines/magda-api)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Stateless Go API for MAGDA (Musical AI Digital Assistant) - AI-powered music production assistant for REAPER.
 
 ## Overview
