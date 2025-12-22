@@ -23,6 +23,7 @@ type Config struct {
 	LangfuseSecretKey  string // Langfuse secret key for server-side
 	LangfuseHost       string // Langfuse host URL (cloud or self-hosted)
 	LangfuseEnabled    bool   // Feature flag for Langfuse
+	AuthMode           string // Auth mode: "jwt" (default), "gateway" (trust X-User-* headers)
 }
 
 func Load() *Config {
@@ -47,6 +48,7 @@ func Load() *Config {
 		LangfuseSecretKey:  getEnv("LANGFUSE_SECRET_KEY", ""),
 		LangfuseHost:       getEnv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
 		LangfuseEnabled:    getEnv("LANGFUSE_ENABLED", "false") == "true",
+		AuthMode:           getEnv("AUTH_MODE", "jwt"), // "jwt" or "gateway"
 	}
 }
 
@@ -57,4 +59,9 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// IsGatewayMode returns true if running behind the Express gateway
+func (c *Config) IsGatewayMode() bool {
+	return c.AuthMode == "gateway"
 }
