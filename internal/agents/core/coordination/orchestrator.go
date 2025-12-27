@@ -227,6 +227,7 @@ func (o *Orchestrator) GenerateActionsStream(
 	var (
 		mu               sync.Mutex
 		pendingNotes     []models.NoteEvent
+		arrangerActions  []map[string]any // Track arranger actions for generating clip name
 		clipCreated      bool
 		targetTrackIdx   int = 0
 		allActions       []map[string]any
@@ -263,13 +264,20 @@ func (o *Orchestrator) GenerateActionsStream(
 				}
 			}
 
+			// Generate descriptive name from arranger actions (e.g., "Em Arpeggio")
+			clipName := generateClipName(arrangerActions)
+			if clipName == "" {
+				clipName = question // Fallback to original request
+			}
+
 			midiAction := map[string]any{
 				"action": "add_midi",
 				"track":  targetTrackIdx,
 				"notes":  notesArray,
+				"name":   clipName,
 			}
 
-			log.Printf("🎵 [Stream] Emitting add_midi with %d notes to track %d", len(pendingNotes), targetTrackIdx)
+			log.Printf("🎵 [Stream] Emitting add_midi with %d notes to track %d (name: %s)", len(pendingNotes), targetTrackIdx, clipName)
 			allActions = append(allActions, midiAction)
 			pendingNotes = nil // Clear buffer
 
@@ -360,6 +368,11 @@ func (o *Orchestrator) GenerateActionsStream(
 				log.Printf("⚠️ [Stream] Arranger agent error: %v", err)
 				return
 			}
+
+			// Store arranger actions for clip naming
+			mu.Lock()
+			arrangerActions = result.Actions
+			mu.Unlock()
 
 			// Convert arranger actions to NoteEvents and buffer them
 			currentBeat := 0.0
@@ -599,6 +612,7 @@ func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *Ar
 			}
 
 			// Create add_midi action
+			// Note: In non-streaming mode, we don't have access to the original question here
 			midiAction := map[string]any{
 				"action": "add_midi",
 				"notes":  notesArray,
@@ -697,6 +711,7 @@ func (o *Orchestrator) mergeResults(dawResult *daw.DawResult, arrangerResult *Ar
 				if lastTrackIndex >= 0 {
 					midiAction["track"] = lastTrackIndex
 				}
+				// Note: In non-streaming merge mode, original question is not available here
 
 				result.Actions = append(result.Actions, midiAction)
 				log.Printf("✅ Created new add_midi action with %d notes (track=%d)", len(notesArray), lastTrackIndex)
@@ -761,4 +776,58 @@ func getTrackCount(state map[string]any) int {
 		}
 	}
 	return 0
+}
+
+// generateClipName creates a descriptive name from arranger actions
+// e.g., "Em Arpeggio", "C Chord", "E1 Note", "C-Am-F-G Progression"
+func generateClipName(arrangerActions []map[string]any) string {
+	if len(arrangerActions) == 0 {
+		return ""
+	}
+
+	// Use the first action to generate the name
+	action := arrangerActions[0]
+	actionType, _ := action["type"].(string)
+
+	switch actionType {
+	case "arpeggio":
+		if chord, ok := action["chord"].(string); ok {
+			return chord + " Arpeggio"
+		}
+	case "chord":
+		if chord, ok := action["chord"].(string); ok {
+			return chord + " Chord"
+		}
+	case "note":
+		if pitch, ok := action["pitch"].(string); ok {
+			return pitch + " Note"
+		}
+	case "progression":
+		if chords, ok := action["chords"].([]string); ok && len(chords) > 0 {
+			// Join chords with dashes, e.g., "C-Am-F-G"
+			name := ""
+			for i, c := range chords {
+				if i > 0 {
+					name += "-"
+				}
+				name += c
+			}
+			return name + " Progression"
+		}
+		// Handle []any (from JSON)
+		if chordsAny, ok := action["chords"].([]any); ok && len(chordsAny) > 0 {
+			name := ""
+			for i, c := range chordsAny {
+				if i > 0 {
+					name += "-"
+				}
+				if s, ok := c.(string); ok {
+					name += s
+				}
+			}
+			return name + " Progression"
+		}
+	}
+
+	return ""
 }
