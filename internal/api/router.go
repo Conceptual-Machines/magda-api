@@ -60,6 +60,7 @@ func SetupRouter(cfg *config.Config, version string) *gin.Engine {
 
 		// MAGDA Mix Analysis endpoint
 		v1.POST("/mix/analyze", mixHandler.MixAnalyze)
+		v1.POST("/mix/analyze/stream", mixHandler.MixAnalyzeStream)
 
 		// JSFX agent endpoint - AI-assisted JSFX effect generation
 		v1.POST("/jsfx/generate", jsfxHandler.Generate)

@@ -573,6 +573,126 @@ func (a *MixAnalysisAgent) Analyze(ctx context.Context, request *AnalysisRequest
 	return result, nil
 }
 
+// MixStreamCallback is called for each chunk of streamed text
+type MixStreamCallback func(chunk string) error
+
+// AnalyzeStream performs mix analysis with real-time text streaming
+// Unlike the regular Analyze method, this streams readable text analysis
+// rather than structured JSON (better UX for streaming)
+func (a *MixAnalysisAgent) AnalyzeStream(
+	ctx context.Context,
+	request *AnalysisRequest,
+	callback MixStreamCallback,
+) (*AnalysisResult, error) {
+	startTime := time.Now()
+	log.Printf("🎛️ MIX ANALYSIS STREAM STARTED: mode=%s", request.Mode)
+
+	// Start Sentry transaction
+	transaction := sentry.StartTransaction(ctx, "mix.analyze_stream")
+	defer transaction.Finish()
+
+	transaction.SetTag("mode", string(request.Mode))
+	transaction.SetTag("streaming", "true")
+	if request.Context != nil {
+		transaction.SetTag("track_type", request.Context.TrackType)
+		transaction.SetTag("genre", request.Context.Genre)
+	}
+
+	// Build the analysis prompt (same as non-streaming)
+	prompt, err := a.buildAnalysisPrompt(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build prompt: %w", err)
+	}
+
+	// Map accuracy level to reasoning mode
+	reasoningMode := a.mapAccuracyToReasoning(request.Accuracy, request.Mode)
+	log.Printf("🎯 Accuracy: %s → Reasoning: %s", request.Accuracy, reasoningMode)
+
+	// For streaming, use text prompt that generates readable analysis
+	streamingSystemPrompt := a.systemPrompt + `
+
+## STREAMING OUTPUT FORMAT
+Since this is a streaming response, output your analysis as human-readable text (not JSON).
+
+Structure your response as:
+1. **Overview**: Brief summary of the track's current state
+2. **Issues Found**: List problems detected, ordered by severity
+3. **Recommendations**: What to do to improve the mix
+
+Keep your response concise but informative. Focus on the most impactful observations.`
+
+	// Create LLM request WITHOUT structured output for streaming
+	llmRequest := &llm.GenerationRequest{
+		Model:         "gpt-5.2",
+		SystemPrompt:  streamingSystemPrompt,
+		ReasoningMode: reasoningMode,
+		InputArray: []map[string]any{
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+		// No OutputSchema - we want free-form text for streaming
+	}
+
+	// Check if provider supports streaming
+	streamingProvider, ok := a.provider.(llm.StreamingProvider)
+	if !ok {
+		log.Printf("⚠️ Provider %s does not support streaming", a.provider.Name())
+		return nil, fmt.Errorf("streaming not supported by provider")
+	}
+
+	// Stream callback adapter
+	var accumulatedText string
+	streamCallback := func(event llm.StreamEvent) error {
+		switch event.Type {
+		case "text_delta", "chunk":
+			chunk := event.Message
+			if chunk != "" && callback != nil {
+				accumulatedText += chunk
+				if cbErr := callback(chunk); cbErr != nil {
+					log.Printf("⚠️ Mix Stream callback error: %v", cbErr)
+					return cbErr
+				}
+			}
+		case "started":
+			log.Printf("🚀 Mix analysis streaming started")
+		case "completed":
+			log.Printf("✅ Mix analysis streaming completed: %d chars", len(accumulatedText))
+		}
+		return nil
+	}
+
+	// Call streaming provider
+	log.Printf("🚀 MIX ANALYSIS STREAMING: model=%s", llmRequest.Model)
+	resp, err := streamingProvider.GenerateStream(ctx, llmRequest, streamCallback)
+	if err != nil {
+		transaction.SetTag("success", "false")
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("streaming generation failed: %w", err)
+	}
+
+	// Get the final text (use accumulated or response)
+	finalText := resp.RawOutput
+	if finalText == "" {
+		finalText = accumulatedText
+	}
+
+	duration := time.Since(startTime)
+	log.Printf("✅ MIX ANALYSIS STREAM COMPLETE in %v", duration)
+
+	transaction.SetTag("success", "true")
+
+	// Return a minimal result with the summary (no structured recommendations for streaming)
+	// If structured data is needed, client should call the non-streaming endpoint
+	return &AnalysisResult{
+		Analysis: &AnalysisSummary{
+			Summary: finalText,
+		},
+		Recommendations: nil, // Streaming mode doesn't provide structured recommendations
+	}, nil
+}
+
 func (a *MixAnalysisAgent) buildAnalysisPrompt(request *AnalysisRequest) (string, error) {
 	// Serialize analysis data for the prompt
 	analysisJSON, err := json.MarshalIndent(request.AnalysisData, "", "  ")
