@@ -56,8 +56,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix={{branch}}-
-            type=raw,value={{date 'YYYYMMDD'}}-{{sha}},enable=${{github.event_name == 'workflow_dispatch'}}
+            type=sha,prefix=main-,enable=${{ github.ref_type == 'branch' }}
+            type=raw,value={{date 'YYYYMMDD'}}-{{sha}},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
